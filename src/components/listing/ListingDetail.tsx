@@ -8,6 +8,7 @@ import { SpecsTable } from "./SpecsTable";
 import { PriceTable } from "./PriceTable";
 import { AvailabilityCalendar } from "./AvailabilityCalendar";
 import { RentRequestForm } from "./RentRequestForm";
+import { RentalSelectionProvider } from "./rental-selection";
 import { ContactBox } from "./ContactBox";
 import { OwnerCard } from "./OwnerCard";
 import { SimilarListings } from "./SimilarListings";
@@ -48,6 +49,7 @@ export function ListingDetail({ listing, owner }: { listing: Listing; owner?: Us
         )}
       </nav>
 
+      <RentalSelectionProvider>
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Sol kolon */}
         <div className="lg:col-span-2">
@@ -104,7 +106,7 @@ export function ListingDetail({ listing, owner }: { listing: Listing; owner?: Us
           </Section>
 
           <Section title="Müsaitlik Takvimi">
-            <AvailabilityCalendar listingId={listing.id} />
+            <AvailabilityCalendar listingId={listing.id} availability={listing.availability} />
           </Section>
 
           <Section title="Güvenli Kiralama">
@@ -119,9 +121,19 @@ export function ListingDetail({ listing, owner }: { listing: Listing; owner?: Us
           </Section>
         </div>
 
-        {/* Sağ kolon — sticky */}
+        {/* Sağ kolon — sahibi + kiralama talebi (fotoğrafın yanında, sabit değil) */}
         <div className="lg:col-span-1">
-          <div className="space-y-4 lg:sticky lg:top-20">
+          <div className="space-y-4">
+            {/* İlan sahibi — üstte sabit */}
+            {owner ? (
+              <OwnerCard owner={owner} />
+            ) : (
+              <div className="rounded-lg border border-line bg-surface p-5 text-sm text-faint">
+                İlan sahibi bilgisi yükleniyor…
+              </div>
+            )}
+
+            {/* Kiralama talebi — sahibinin altında sabit */}
             <div className="rounded-lg border border-line bg-surface p-5">
               {price ? (
                 <p className="text-3xl font-extrabold text-accent">
@@ -153,11 +165,10 @@ export function ListingDetail({ listing, owner }: { listing: Listing; owner?: Us
                 )}
               </div>
             </div>
-
-            {owner && <OwnerCard owner={owner} />}
           </div>
         </div>
       </div>
+      </RentalSelectionProvider>
 
       <SimilarListings listing={listing} />
     </div>

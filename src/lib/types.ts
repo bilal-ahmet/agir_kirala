@@ -2,10 +2,7 @@
 // Bu katman ileride gerçek API/DB ile değiştirilebilir; UI yalnızca bu tiplere bağlıdır.
 
 /** Kiralama fiyatlandırma periyodu */
-export type RentalPeriod = "saatlik" | "gunluk" | "haftalik" | "aylik";
-
-/** Üst kategori grubu */
-export type CategoryGroup = "agir-vasita" | "is-makinesi";
+export type RentalPeriod = "saatlik" | "gunluk" | "haftalik" | "aylik" | "yillik";
 
 /** İlan sahibi tipi */
 export type OwnerType = "bireysel" | "kurumsal";
@@ -48,7 +45,6 @@ export interface SubCategory {
 export interface Category {
   slug: string;
   name: string;
-  group: CategoryGroup;
   /** Kısa açıklama (kategori kartı) */
   tagline: string;
   /** Görsel/placeholder için emoji-glif */
@@ -80,6 +76,20 @@ export interface User {
 /** Bir periyot bazında kira fiyatı (₺). Sahibi yalnızca sunduğu periyotları doldurur. */
 export type PriceMap = Partial<Record<RentalPeriod, number>>;
 
+/** İlan müsaitlik bilgisi (ilan sahibi tarafından belirlenir). */
+export interface Availability {
+  /** Müsait olunan haftanın günleri (0=Pzt … 6=Pz). Boş = tüm günler. */
+  weekdays: number[];
+  /** Günlük müsait başlangıç saati ("08:00"). */
+  startTime?: string;
+  /** Günlük müsait bitiş saati ("18:00"). */
+  endTime?: string;
+  /** Müsaitlik aralığı başlangıç tarihi (ISO, "2026-07-01"). */
+  dateFrom?: string;
+  /** Müsaitlik aralığı bitiş tarihi (ISO). */
+  dateTo?: string;
+}
+
 export interface Listing {
   id: string;
   title: string;
@@ -107,6 +117,8 @@ export interface Listing {
   featured?: boolean;
   /** Minimum kiralama süresi (gün) */
   minRentalDays?: number;
+  /** İlan sahibinin belirlediği müsaitlik */
+  availability?: Availability;
   /** Görsel çeşitliliği için tohum (placeholder gradyanı) */
   photoSeed?: number;
   /** Kaç fotoğraf gösterileceği (placeholder galeri) */

@@ -6,35 +6,44 @@
 */
 
 @theme {
+  /*
+    Tokenlar burada kayıt edilir (utility üretimi için). Varsayılan değerler
+    AYDINLIK temadır. Koyu tema [data-theme="dark"] altında geçersiz kılınır.
+  */
+
   /* Zeminler */
-  --color-base: #0b0b0d;
-  --color-surface: #141418;
-  --color-surface-2: #1c1c22;
-  --color-surface-3: #26262e;
+  --color-base: #f3f3f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5f5f7;
+  --color-surface-3: #e9e9ee;
 
   /* Kenarlıklar */
-  --color-line: #2a2a32;
-  --color-line-strong: #3a3a44;
+  --color-line: #e2e2e8;
+  --color-line-strong: #cfcfd8;
 
   /* Metin */
-  --color-fg: #f5f5f7;
-  --color-muted: #a1a1aa;
-  --color-faint: #71717a;
+  --color-fg: #18181b;
+  --color-muted: #52525b;
+  --color-faint: #8a8a93;
 
   /* Vurgu — inşaat sarısı */
   --color-accent: #f5b100;
-  --color-accent-hover: #ffc224;
-  --color-accent-soft: #2a2410;
+  --color-accent-hover: #d99e00;
+  --color-accent-soft: #fff5d6;
   --color-accent-fg: #1a1400;
 
   /* Durum renkleri */
-  --color-success: #22c55e;
-  --color-success-soft: #0f2417;
-  --color-danger: #ef4444;
-  --color-danger-soft: #2a1414;
-  --color-info: #38bdf8;
-  --color-info-soft: #0c2230;
-  --color-warning: #f59e0b;
+  --color-success: #16a34a;
+  --color-success-soft: #e7f6ed;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fdecec;
+  --color-info: #0284c7;
+  --color-info-soft: #e2f2fb;
+  --color-warning: #d97706;
+
+  /* Dekoratif grid/şerit çizgisi */
+  --grid-line: rgba(0, 0, 0, 0.045);
+  --stripe-dark: #d9d9de;
 
   /* Tipografi */
   --font-display: var(--font-oswald);
@@ -46,6 +55,46 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+/*
+  Koyu tema — mevcut endüstriyel çelik paleti. Katmansız (unlayered) tanım,
+  @theme'in :root değerlerini geçersiz kılar.
+*/
+:root {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-base: #0b0b0d;
+  --color-surface: #141418;
+  --color-surface-2: #1c1c22;
+  --color-surface-3: #26262e;
+
+  --color-line: #2a2a32;
+  --color-line-strong: #3a3a44;
+
+  --color-fg: #f5f5f7;
+  --color-muted: #a1a1aa;
+  --color-faint: #71717a;
+
+  --color-accent: #f5b100;
+  --color-accent-hover: #ffc224;
+  --color-accent-soft: #2a2410;
+  --color-accent-fg: #1a1400;
+
+  --color-success: #22c55e;
+  --color-success-soft: #0f2417;
+  --color-danger: #ef4444;
+  --color-danger-soft: #2a1414;
+  --color-info: #38bdf8;
+  --color-info-soft: #0c2230;
+  --color-warning: #f59e0b;
+
+  --grid-line: rgba(255, 255, 255, 0.035);
+  --stripe-dark: #0b0b0d;
 }
 
 @layer base {
@@ -114,8 +163,8 @@
   /* Endüstriyel grid doku (hero arka planı) */
   .bg-grid {
     background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
     background-size: 56px 56px;
   }
 
@@ -125,8 +174,8 @@
       45deg,
       var(--color-accent) 0,
       var(--color-accent) 12px,
-      #0b0b0d 12px,
-      #0b0b0d 24px
+      var(--stripe-dark) 12px,
+      var(--stripe-dark) 24px
     );
   }
 

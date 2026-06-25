@@ -1,7 +1,7 @@
 "use client";
 
 import { useFilters } from "./use-filters";
-import { CATEGORIES, GROUP_LABELS, getCategory, getFilterableSpecFields } from "@/lib/categories";
+import { CATEGORIES, getCategory, getFilterableSpecFields } from "@/lib/categories";
 import { brandsForCategory } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
@@ -12,11 +12,9 @@ import {
   PERIODS,
   TRANSPORT_LABELS,
 } from "@/lib/constants";
-import type { CategoryGroup, FuelType, OwnerType, TransportOption } from "@/lib/types";
+import type { FuelType, OwnerType, TransportOption } from "@/lib/types";
 import { Input, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
-
-const GROUPS: CategoryGroup[] = ["is-makinesi", "agir-vasita"];
 
 export function FilterControls() {
   const { sp, setParam, toggleInList, update } = useFilters();
@@ -45,14 +43,10 @@ export function FilterControls() {
           }
         >
           <option value="">Tüm Kategoriler</option>
-          {GROUPS.map((group) => (
-            <optgroup key={group} label={GROUP_LABELS[group]}>
-              {CATEGORIES.filter((c) => c.group === group).map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
+          {CATEGORIES.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.name}
+            </option>
           ))}
         </Select>
 
@@ -125,9 +119,8 @@ export function FilterControls() {
       <Section title="Operatör">
         <Segmented
           value={sp.get("operator") || ""}
-          onChange={(v) => setParam("operator", v)}
+          onChange={(v) => setParam("operator", v === (sp.get("operator") || "") ? "" : v)}
           options={[
-            { value: "", label: "Farketmez" },
             { value: "operatorlu", label: "Operatörlü" },
             { value: "operatorsuz", label: "Operatörsüz" },
           ]}

@@ -6,15 +6,14 @@ import { Avatar } from "@/components/ui/Avatar";
 import { buttonClasses } from "@/components/ui/Button";
 import { useAuth } from "@/context/auth-context";
 import { useFavorites } from "@/context/favorites-context";
-import { CATEGORIES, GROUP_LABELS } from "@/lib/categories";
-import type { CategoryGroup } from "@/lib/types";
-import { HeartIcon, ListIcon, LogoutIcon, MessageIcon, PlusIcon, UserIcon } from "@/components/ui/icons";
-
-const GROUPS: CategoryGroup[] = ["is-makinesi", "agir-vasita"];
+import { CATEGORIES } from "@/lib/categories";
+import { HeartIcon, ListIcon, LogoutIcon, MessageIcon, MoonIcon, PlusIcon, SunIcon, UserIcon } from "@/components/ui/icons";
+import { useTheme } from "@/context/theme-context";
 
 export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, ready, logout } = useAuth();
   const { count } = useFavorites();
+  const { theme, toggle } = useTheme();
 
   return (
     <Sheet open={open} onClose={onClose} title="Menü" side="right">
@@ -59,29 +58,32 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
               </MobileLink>
             </>
           )}
+          <button
+            onClick={toggle}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-fg"
+          >
+            {theme === "dark" ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+            {theme === "dark" ? "Aydınlık Tema" : "Karanlık Tema"}
+          </button>
         </nav>
 
-        <div className="space-y-4">
-          {GROUPS.map((group) => (
-            <div key={group}>
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
-                {GROUP_LABELS[group]}
-              </p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {CATEGORIES.filter((c) => c.group === group).map((c) => (
-                  <Link
-                    key={c.slug}
-                    href={`/ilanlar?kategori=${c.slug}`}
-                    onClick={onClose}
-                    className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-2 text-sm text-muted hover:text-fg"
-                  >
-                    <span>{c.icon}</span>
-                    <span className="truncate">{c.name}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
+            Kategoriler
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {CATEGORIES.map((c) => (
+              <Link
+                key={c.slug}
+                href={`/ilanlar?kategori=${c.slug}`}
+                onClick={onClose}
+                className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-2 text-sm text-muted hover:text-fg"
+              >
+                <span>{c.icon}</span>
+                <span className="truncate">{c.name}</span>
+              </Link>
+            ))}
+          </div>
         </div>
 
         {user && (

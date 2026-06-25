@@ -35,11 +35,14 @@ export const VEHICLE_BRANDS = [
 
 import { getCategory } from "./categories";
 
+/** Karayolu taşıtı (kamyon) sayılan kategoriler — araç markaları gösterilir */
+const VEHICLE_CATEGORY_SLUGS = new Set(["damperli-kamyon"]);
+
 /** Kategoriye uygun marka listesini döndürür */
 export function brandsForCategory(categorySlug: string | undefined): string[] {
   const cat = getCategory(categorySlug);
   if (!cat) return Array.from(new Set([...MACHINE_BRANDS, ...VEHICLE_BRANDS])).sort();
-  return cat.group === "agir-vasita" ? VEHICLE_BRANDS : MACHINE_BRANDS;
+  return VEHICLE_CATEGORY_SLUGS.has(cat.slug) ? VEHICLE_BRANDS : MACHINE_BRANDS;
 }
 
 export const ALL_BRANDS = Array.from(

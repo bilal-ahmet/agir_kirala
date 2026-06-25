@@ -4,35 +4,31 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { addLocalListing } from "@/lib/storage";
-import {
-  CATEGORIES,
-  GROUP_LABELS,
-  getCategory,
-} from "@/lib/categories";
+import { CATEGORIES, getCategory } from "@/lib/categories";
 import { brandsForCategory } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
   FUEL_LABELS,
+  LISTING_PERIODS,
   MAX_YEAR,
   MIN_YEAR,
-  PERIODS,
-  TRANSPORT_LABELS,
 } from "@/lib/constants";
 import type {
-  CategoryGroup,
+  Availability,
   FuelType,
   Listing,
+  ListingStatus,
   PriceMap,
   RentalPeriod,
-  TransportOption,
 } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Label, Select, Textarea } from "@/components/ui/Field";
 import { ListingCard } from "@/components/listing/ListingCard";
+import { ListingDetail } from "@/components/listing/ListingDetail";
+import { AvailabilityPicker } from "@/components/listing/AvailabilityPicker";
 import { cn } from "@/lib/cn";
 import { CheckIcon } from "@/components/ui/icons";
 
-const GROUPS: CategoryGroup[] = ["is-makinesi", "agir-vasita"];
 const STEPS = ["Kategori", "Temel Bilgiler", "Özellikler", "Fiyat & Yayın"];
 
 type SpecVal = string | number | boolean;
@@ -48,10 +44,10 @@ interface FormState {
   district: string;
   description: string;
   operator: boolean;
-  transport: TransportOption;
   fuel: FuelType;
   usage: string;
   specs: Record<string, SpecVal>;
+  availability: Availability;
   prices: Partial<Record<RentalPeriod, string>>;
   minRentalDays: number;
 }
@@ -60,6 +56,8 @@ export default function IlanEklePage() {
   const { user } = useAuth();
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [maxStep, setMaxStep] = useState(0);
+  const [previewing, setPreviewing] = useState(false);
   const [seed] = useState(() => Math.floor(Math.random() * 999));
   const [error, setError] = useState<string | null>(null);
 
@@ -74,10 +72,10 @@ export default function IlanEklePage() {
     district: "",
     description: "",
     operator: false,
-    transport: "ekstra",
     fuel: "dizel",
     usage: "",
     specs: {},
+    availability: { weekdays: [] },
     prices: {},
     minRentalDays: 1,
   });
@@ -90,7 +88,7 @@ export default function IlanEklePage() {
 
   const parsedPrices = useMemo<PriceMap>(() => {
     const out: PriceMap = {};
-    for (const p of PERIODS) {
+    for (const p of LISTING_PERIODS) {
       const v = form.prices[p.value];
       if (v && Number(v) > 0) out[p.value] = Number(v);
     }
@@ -107,6 +105,13 @@ export default function IlanEklePage() {
     return out;
   }, [form.specs, category]);
 
+  const hasAvailability =
+    form.availability.weekdays.length > 0 ||
+    !!form.availability.startTime ||
+    !!form.availability.endTime ||
+    !!form.availability.dateFrom ||
+    !!form.availability.dateTo;
+
   const preview: Listing = {
     id: "preview",
     title: form.title || `${form.brand} ${form.model}`.trim() || "Yeni İlan",
@@ -119,7 +124,7 @@ export default function IlanEklePage() {
     district: form.district || "",
     prices: parsedPrices,
     operator: form.operator,
-    transport: form.transport,
+    transport: "yok",
     fuel: form.fuel,
     usage: Number(form.usage) || 0,
     specs: parsedSpecs,
@@ -129,37 +134,104 @@ export default function IlanEklePage() {
     createdAt: new Date().toISOString(),
     photoSeed: seed,
     photoCount: 3,
+    ...(hasAvailability ? { availability: form.availability } : {}),
   };
 
   if (!user) return null;
 
-  const canNext = () => {
-    if (step === 0) return Boolean(form.categorySlug && form.subCategorySlug);
-    if (step === 1) return Boolean(form.brand && form.model && form.city);
-    return true;
+  // ───────── doğrulama ─────────
+  const missingForStep = (s: number): string[] => {
+    if (s === 0) {
+      const m: string[] = [];
+      if (!form.categorySlug) m.push("Kategori");
+      if (!form.subCategorySlug) m.push("Alt Kategori");
+      return m;
+    }
+    if (s === 1) {
+      const m: string[] = [];
+      if (!form.title.trim()) m.push("İlan Başlığı");
+      if (!form.brand) m.push("Marka");
+      if (!form.year) m.push("Model Yılı");
+      if (!form.city) m.push("Şehir");
+      if (!form.district) m.push("İlçe");
+      return m;
+    }
+    return [];
+  };
+
+  const goToStep = (target: number) => {
+    if (target <= maxStep) {
+      setStep(target);
+      setError(null);
+    }
   };
 
   const next = () => {
-    if (!canNext()) {
-      setError("Lütfen zorunlu alanları doldurun.");
+    const missing = missingForStep(step);
+    if (missing.length > 0) {
+      setError(`Lütfen zorunlu alanları doldurun: ${missing.join(", ")}.`);
       return;
     }
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    const target = Math.min(step + 1, STEPS.length - 1);
+    setStep(target);
+    setMaxStep((m) => Math.max(m, target));
+    setError(null);
+  };
+
+  const buildListing = (status: ListingStatus): Listing => ({
+    ...preview,
+    id: `l-${Date.now()}`,
+    status,
+    title: form.title || `${form.brand} ${form.model}`.trim(),
+    minRentalDays: form.minRentalDays,
+  });
+
+  const saveDraft = () => {
+    addLocalListing(buildListing("taslak"));
+    router.push("/hesap/ilanlarim?durum=taslak");
   };
 
   const publish = () => {
     if (Object.keys(parsedPrices).length === 0) {
       setError("En az bir fiyatlandırma periyodu girin.");
+      setPreviewing(false);
+      setStep(3);
       return;
     }
-    addLocalListing({
-      ...preview,
-      id: `l-${Date.now()}`,
-      title: form.title || `${form.brand} ${form.model}`.trim(),
-      minRentalDays: form.minRentalDays,
-    });
+    addLocalListing(buildListing("aktif"));
     router.push("/hesap/ilanlarim");
   };
+
+  // ───────── önizleme ekranı (ilan sayfası gibi) ─────────
+  if (previewing) {
+    return (
+      <div className="space-y-5">
+        {/* Önizleme aksiyon çubuğu */}
+        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-accent/40 bg-accent-soft px-4 py-3">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wide text-accent">Önizleme Modu</p>
+            <p className="text-xs text-muted">İlanın yayınlandığında nasıl görüneceği aşağıdadır.</p>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setPreviewing(false)}>
+              ‹ Düzenlemeye Dön
+            </Button>
+            <Button variant="outline" size="sm" onClick={saveDraft}>
+              Taslak Kaydet
+            </Button>
+            <Button size="sm" onClick={publish}>İlanı Yayınla</Button>
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-danger">{error}</p>}
+
+        {/* Gerçek ilan detay görünümü */}
+        <div className="overflow-hidden rounded-lg border border-line">
+          <ListingDetail listing={buildListing("aktif")} owner={user} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -168,49 +240,64 @@ export default function IlanEklePage() {
         <p className="text-muted">Makineni birkaç adımda kiralamaya hazır hale getir.</p>
       </div>
 
-      {/* Adım göstergesi */}
+      {/* Adım göstergesi — tıklanabilir */}
       <div className="flex items-center gap-2">
-        {STEPS.map((label, i) => (
-          <div key={label} className="flex flex-1 items-center gap-2">
-            <div
-              className={cn(
-                "grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold",
-                i < step && "bg-success text-white",
-                i === step && "bg-accent text-accent-fg",
-                i > step && "bg-surface-3 text-faint",
-              )}
-            >
-              {i < step ? <CheckIcon size={16} /> : i + 1}
+        {STEPS.map((label, i) => {
+          const clickable = i <= maxStep;
+          return (
+            <div key={label} className="flex flex-1 items-center gap-2">
+              <button
+                type="button"
+                disabled={!clickable}
+                onClick={() => goToStep(i)}
+                className={cn(
+                  "flex items-center gap-2",
+                  clickable ? "cursor-pointer" : "cursor-not-allowed",
+                )}
+              >
+                <span
+                  className={cn(
+                    "grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold transition-colors",
+                    i < step && "bg-success text-white",
+                    i === step && "bg-accent text-accent-fg",
+                    i > step && "bg-surface-3 text-faint",
+                    clickable && i !== step && "hover:ring-2 hover:ring-accent",
+                  )}
+                >
+                  {i < step ? <CheckIcon size={16} /> : i + 1}
+                </span>
+                <span
+                  className={cn(
+                    "hidden text-sm sm:block",
+                    i === step ? "font-semibold text-fg" : "text-faint",
+                  )}
+                >
+                  {label}
+                </span>
+              </button>
+              {i < STEPS.length - 1 && <span className="h-px flex-1 bg-line" />}
             </div>
-            <span className={cn("hidden text-sm sm:block", i === step ? "font-semibold text-fg" : "text-faint")}>
-              {label}
-            </span>
-            {i < STEPS.length - 1 && <span className="h-px flex-1 bg-line" />}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="rounded-lg border border-line bg-surface p-5">
         {/* Adım 0: Kategori */}
         {step === 0 && (
           <div className="space-y-4">
-            <Field label="Kategori">
+            <Field label="Kategori" required>
               <Select
                 value={form.categorySlug}
                 onChange={(e) => set({ categorySlug: e.target.value, subCategorySlug: "", specs: {} })}
               >
                 <option value="">Seçin</option>
-                {GROUPS.map((g) => (
-                  <optgroup key={g} label={GROUP_LABELS[g]}>
-                    {CATEGORIES.filter((c) => c.group === g).map((c) => (
-                      <option key={c.slug} value={c.slug}>{c.name}</option>
-                    ))}
-                  </optgroup>
+                {CATEGORIES.map((c) => (
+                  <option key={c.slug} value={c.slug}>{c.name}</option>
                 ))}
               </Select>
             </Field>
             {category && (
-              <Field label="Alt Kategori">
+              <Field label="Alt Kategori" required>
                 <Select value={form.subCategorySlug} onChange={(e) => set({ subCategorySlug: e.target.value })}>
                   <option value="">Seçin</option>
                   {category.subcategories.map((s) => (
@@ -225,11 +312,11 @@ export default function IlanEklePage() {
         {/* Adım 1: Temel bilgiler */}
         {step === 1 && (
           <div className="space-y-4">
-            <Field label="İlan Başlığı" hint="Boş bırakırsan marka + model kullanılır.">
+            <Field label="İlan Başlığı" required>
               <Input value={form.title} onChange={(e) => set({ title: e.target.value })} placeholder="Örn. Caterpillar 320 Paletli Ekskavatör" />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Marka">
+              <Field label="Marka" required>
                 <Select value={form.brand} onChange={(e) => set({ brand: e.target.value })}>
                   <option value="">Seçin</option>
                   {brandsForCategory(form.categorySlug).map((b) => (
@@ -237,12 +324,12 @@ export default function IlanEklePage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Model">
+              <Field label="Model" hint="İsteğe bağlı.">
                 <Input value={form.model} onChange={(e) => set({ model: e.target.value })} placeholder="Örn. 320 GC" />
               </Field>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Model Yılı">
+              <Field label="Model Yılı" required>
                 <Input
                   type="number"
                   min={MIN_YEAR}
@@ -251,7 +338,7 @@ export default function IlanEklePage() {
                   onChange={(e) => set({ year: Number(e.target.value) })}
                 />
               </Field>
-              <Field label="Şehir">
+              <Field label="Şehir" required>
                 <Select value={form.city} onChange={(e) => set({ city: e.target.value, district: "" })}>
                   <option value="">Seçin</option>
                   {PROVINCE_NAMES.map((p) => (
@@ -259,7 +346,7 @@ export default function IlanEklePage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="İlçe">
+              <Field label="İlçe" required>
                 <Select value={form.district} onChange={(e) => set({ district: e.target.value })} disabled={!form.city}>
                   <option value="">Seçin</option>
                   {districtsOf(form.city).map((d) => (
@@ -268,7 +355,7 @@ export default function IlanEklePage() {
                 </Select>
               </Field>
             </div>
-            <Field label="Açıklama">
+            <Field label="Açıklama" hint="İsteğe bağlı.">
               <Textarea
                 value={form.description}
                 onChange={(e) => set({ description: e.target.value })}
@@ -285,15 +372,13 @@ export default function IlanEklePage() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Operatör">
                 <Select value={form.operator ? "1" : "0"} onChange={(e) => set({ operator: e.target.value === "1" })}>
-                  <option value="0">Operatörsüz (kuru kiralama)</option>
+                  <option value="0">Operatörsüz</option>
                   <option value="1">Operatörlü</option>
                 </Select>
               </Field>
               <Field label="Nakliye">
-                <Select value={form.transport} onChange={(e) => set({ transport: e.target.value as TransportOption })}>
-                  {(["dahil", "ekstra", "yok"] as TransportOption[]).map((t) => (
-                    <option key={t} value={t}>{TRANSPORT_LABELS[t]}</option>
-                  ))}
+                <Select value="yok" disabled>
+                  <option value="yok">Nakliye Yok (Müşteriye Ait)</option>
                 </Select>
               </Field>
               <Field label="Yakıt">
@@ -350,6 +435,17 @@ export default function IlanEklePage() {
                 ))}
               </div>
             </div>
+
+            <div className="border-t border-line pt-4">
+              <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-fg">Müsaitlik</h3>
+              <p className="mb-3 text-xs text-faint">
+                Makinenin hangi gün ve saatlerde kiralanabileceğini belirtin.
+              </p>
+              <AvailabilityPicker
+                value={form.availability}
+                onChange={(availability) => set({ availability })}
+              />
+            </div>
           </div>
         )}
 
@@ -357,9 +453,9 @@ export default function IlanEklePage() {
         {step === 3 && (
           <div className="space-y-5">
             <div>
-              <Label>Fiyatlandırma (₺) — en az bir periyot</Label>
+              <Label required>Fiyatlandırma (₺) — en az bir periyot</Label>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {PERIODS.map((p) => (
+                {LISTING_PERIODS.map((p) => (
                   <Field key={p.value} label={p.label}>
                     <Input
                       type="number"
@@ -383,7 +479,7 @@ export default function IlanEklePage() {
             </Field>
 
             <div>
-              <Label>Önizleme</Label>
+              <Label>Kart Önizlemesi</Label>
               <div className="max-w-xs">
                 <ListingCard listing={preview} />
               </div>
@@ -394,7 +490,7 @@ export default function IlanEklePage() {
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
         {/* Gezinme */}
-        <div className="mt-6 flex items-center justify-between border-t border-line pt-5">
+        <div className="mt-6 flex items-center justify-between gap-3 border-t border-line pt-5">
           <Button
             variant="ghost"
             onClick={() => setStep((s) => Math.max(s - 1, 0))}
@@ -405,7 +501,14 @@ export default function IlanEklePage() {
           {step < STEPS.length - 1 ? (
             <Button onClick={next}>Devam Et ›</Button>
           ) : (
-            <Button onClick={publish}>İlanı Yayınla</Button>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={saveDraft}>
+                Taslak Kaydet
+              </Button>
+              <Button onClick={() => { setError(null); setPreviewing(true); }}>
+                Önizle ve Yayınla ›
+              </Button>
+            </div>
           )}
         </div>
       </div>

@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "./Logo";
 import { MobileMenu } from "./MobileMenu";
+import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/context/auth-context";
 import { useFavorites } from "@/context/favorites-context";
-import { CATEGORIES, GROUP_LABELS } from "@/lib/categories";
-import type { CategoryGroup } from "@/lib/types";
+import { CATEGORIES } from "@/lib/categories";
 import { buttonClasses } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import {
@@ -21,8 +21,6 @@ import {
   UserIcon,
 } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
-
-const GROUPS: CategoryGroup[] = ["is-makinesi", "agir-vasita"];
 
 export function Header() {
   const { user, ready, logout } = useAuth();
@@ -55,27 +53,20 @@ export function Header() {
               <ChevronDownIcon size={16} className={cn("transition-transform", openMenu === "kategori" && "rotate-180")} />
             </button>
             {openMenu === "kategori" && (
-              <div className="absolute left-0 top-full mt-2 grid w-[34rem] grid-cols-2 gap-6 rounded-lg border border-line bg-surface p-5 shadow-2xl">
-                {GROUPS.map((group) => (
-                  <div key={group}>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
-                      {GROUP_LABELS[group]}
-                    </p>
-                    <ul className="space-y-0.5">
-                      {CATEGORIES.filter((c) => c.group === group).map((c) => (
-                        <li key={c.slug}>
-                          <Link
-                            href={`/ilanlar?kategori=${c.slug}`}
-                            onClick={() => setOpenMenu(null)}
-                            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
-                          >
-                            <span className="text-base">{c.icon}</span>
-                            {c.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+              <div className="absolute left-0 top-full mt-2 grid w-[32rem] grid-cols-2 gap-1 rounded-lg border border-line bg-surface p-3 shadow-2xl">
+                {CATEGORIES.map((c) => (
+                  <Link
+                    key={c.slug}
+                    href={`/ilanlar?kategori=${c.slug}`}
+                    onClick={() => setOpenMenu(null)}
+                    className="flex items-center gap-3 rounded-md px-3 py-2.5 hover:bg-surface-2"
+                  >
+                    <span className="text-2xl">{c.icon}</span>
+                    <span>
+                      <span className="block text-sm font-semibold text-fg">{c.name}</span>
+                      <span className="block text-xs text-faint">{c.tagline}</span>
+                    </span>
+                  </Link>
                 ))}
               </div>
             )}
@@ -89,6 +80,7 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
+          <ThemeToggle className="hidden sm:inline-flex" />
           <Link
             href="/hesap/favorilerim"
             className="relative hidden rounded-md p-2.5 text-muted hover:bg-surface-2 hover:text-fg sm:inline-flex"

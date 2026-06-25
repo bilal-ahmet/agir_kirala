@@ -1,253 +1,224 @@
-import type { Category } from "./types";
+import type { Category, SpecField } from "./types";
 
 // Kategoriler — TEK KAYNAK.
 // Filtre paneli, ilan ekleme formu ve detay özellik tablosu hep buradan üretilir.
+// 7 ana kategori; her kategorinin içindeki araçlar alt kategoridir.
+
+// ───────────────────────── tekrar kullanılan özellik alanları ─────────────────────────
+const F = {
+  motorGucu: (steps?: number[]): SpecField => ({
+    key: "motorGucu", label: "Motor Gücü", type: "number", unit: "HP",
+    ...(steps ? { filterable: true, steps } : {}),
+  }),
+  operasyonAgirligi: (steps?: number[]): SpecField => ({
+    key: "operasyonAgirligi", label: "Operasyon Ağırlığı", type: "number", unit: "ton",
+    ...(steps ? { filterable: true, steps } : {}),
+  }),
+  kovaKapasitesi: (steps?: number[]): SpecField => ({
+    key: "kovaKapasitesi", label: "Kova Kapasitesi", type: "number", unit: "m³",
+    ...(steps ? { filterable: true, steps } : {}),
+  }),
+  kaldirmaKapasitesi: (unit: string, steps?: number[]): SpecField => ({
+    key: "kaldirmaKapasitesi", label: "Kaldırma Kapasitesi", type: "number", unit,
+    ...(steps ? { filterable: true, steps } : {}),
+  }),
+  calismaYuksekligi: (steps?: number[]): SpecField => ({
+    key: "calismaYuksekligi", label: "Çalışma Yüksekliği", type: "number", unit: "m",
+    ...(steps ? { filterable: true, steps } : {}),
+  }),
+  guc: (steps?: number[]): SpecField => ({
+    key: "guc", label: "Güç", type: "number", unit: "kVA",
+    ...(steps ? { filterable: true, steps } : {}),
+  }),
+  tonaj: (steps?: number[]): SpecField => ({
+    key: "tonaj", label: "Tonaj", type: "number", unit: "ton",
+    ...(steps ? { filterable: true, steps } : {}),
+  }),
+};
 
 export const CATEGORIES: Category[] = [
-  // ───────────────────────── İŞ MAKİNELERİ ─────────────────────────
+  // ───────────────────────── HAFRİYAT MAKİNELERİ ─────────────────────────
   {
-    slug: "ekskavator",
-    name: "Ekskavatör",
-    group: "is-makinesi",
+    slug: "hafriyat",
+    name: "Hafriyat Makineleri",
     tagline: "Kazı, yükleme ve hafriyat",
     icon: "🚜",
     usageMetric: "saat",
     subcategories: [
-      { slug: "paletli", name: "Paletli Ekskavatör" },
-      { slug: "lastikli", name: "Lastikli Ekskavatör" },
-      { slug: "mini", name: "Mini Ekskavatör" },
+      { slug: "beko-loder", name: "Beko Loder (Kazıcı Yükleyici)" },
+      { slug: "lastikli-yukleyici", name: "Lastikli Yükleyici" },
+      { slug: "bobcat", name: "Bobcat (Mini Yükleyici)" },
+      { slug: "paletli-yukleyici", name: "Paletli Yükleyici" },
+      { slug: "paletli-ekskavator", name: "Paletli Ekskavatör" },
+      { slug: "paletli-mini-ekskavator", name: "Paletli Mini Ekskavatör" },
+      { slug: "lastikli-ekskavator", name: "Lastikli Ekskavatör" },
     ],
     specFields: [
-      { key: "operasyonAgirligi", label: "Operasyon Ağırlığı", type: "number", unit: "ton", filterable: true, steps: [1, 5, 10, 20, 30, 50] },
-      { key: "kovaKapasitesi", label: "Kova Kapasitesi", type: "number", unit: "m³", filterable: true, steps: [0.2, 0.5, 1, 1.5, 2] },
+      F.operasyonAgirligi([1, 5, 10, 20, 30, 50]),
+      F.kovaKapasitesi([0.2, 0.5, 1, 1.5, 2, 3, 5]),
       { key: "kaziDerinligi", label: "Kazı Derinliği", type: "number", unit: "m" },
-      { key: "motorGucu", label: "Motor Gücü", type: "number", unit: "HP" },
+      F.motorGucu([70, 100, 150, 250]),
     ],
   },
+
+  // ───────────────────────── DAMPERLİ KAMYONLAR ─────────────────────────
   {
-    slug: "beko-loder",
-    name: "Beko Loder",
-    group: "is-makinesi",
-    tagline: "Kazıcı yükleyici (JCB tipi)",
-    icon: "🚧",
+    slug: "damperli-kamyon",
+    name: "Damperli Kamyonlar",
+    tagline: "Hafriyat ve agrega taşıma",
+    icon: "🚚",
+    usageMetric: "km",
+    subcategories: [
+      { slug: "10-teker", name: "10 Teker Damperli Kamyon" },
+      { slug: "kirkayak", name: "Kırkayak Damperli Kamyon" },
+      { slug: "belden-kirma", name: "Belden Kırma Kamyon" },
+      { slug: "mini", name: "Mini Damperli Kamyon" },
+      { slug: "lowbed-cekici", name: "Lowbed Çekici Dorse" },
+    ],
+    specFields: [
+      F.tonaj([10, 18, 26, 32, 40]),
+      { key: "dingil", label: "Dingil", type: "select", options: ["4x2", "6x4", "8x4", "10x4"], filterable: true },
+      { key: "kasaUzunlugu", label: "Kasa Uzunluğu", type: "number", unit: "m" },
+      { key: "tasimaKapasitesi", label: "Taşıma Kapasitesi", type: "number", unit: "ton" },
+      { key: "uzunluk", label: "Uzunluk", type: "number", unit: "m" },
+      { key: "dingilSayisi", label: "Dingil Sayısı", type: "number", unit: "adet" },
+    ],
+  },
+
+  // ───────────────────────── BETON MAKİNELERİ ─────────────────────────
+  {
+    slug: "beton",
+    name: "Beton Makineleri",
+    tagline: "Beton üretim, iletim ve dağıtım",
+    icon: "🏭",
     usageMetric: "saat",
     subcategories: [
-      { slug: "2-ceker", name: "2 Çeker (4x2)" },
-      { slug: "4-ceker", name: "4 Çeker (4x4)" },
+      { slug: "beton-mikseri", name: "Beton Mikseri" },
+      { slug: "kamyon-ustu-pompa", name: "Kamyon Üstü Beton Pompası" },
+      { slug: "sabit-pompa", name: "Sabit Beton Pompası" },
+      { slug: "puskurtme-pompa", name: "Püskürtme Beton Pompası" },
+      { slug: "transmikser-pompa", name: "Transmikserli Beton Pompası" },
+      { slug: "hidrolik-dagitici", name: "Hidrolik Beton Dağıtıcı" },
+      { slug: "mekanik-dagitici", name: "Mekanik Beton Dağıtıcı" },
+      { slug: "tirmanir-dagitici", name: "Tırmanır Tip Beton Dağıtıcı" },
     ],
     specFields: [
-      { key: "motorGucu", label: "Motor Gücü", type: "number", unit: "HP", filterable: true, steps: [70, 90, 100, 110] },
-      { key: "kovaKapasitesi", label: "Ön Kova Kapasitesi", type: "number", unit: "m³" },
-      { key: "kaziDerinligi", label: "Kazı Derinliği", type: "number", unit: "m" },
+      { key: "erisimMesafesi", label: "Erişim / Kol Mesafesi", type: "number", unit: "m", filterable: true, steps: [12, 24, 32, 42, 52] },
+      { key: "debi", label: "Pompalama Debisi", type: "number", unit: "m³/sa" },
+      { key: "tamburHacmi", label: "Tambur Hacmi", type: "number", unit: "m³" },
+      { key: "dingil", label: "Dingil", type: "select", options: ["6x4", "8x4"] },
     ],
   },
+
+  // ───────────────────────── ASFALT VE YOL MAKİNELERİ ─────────────────────────
   {
-    slug: "yukleyici",
-    name: "Lastikli Yükleyici",
-    group: "is-makinesi",
-    tagline: "Loader — yığma ve yükleme",
+    slug: "asfalt-yol",
+    name: "Asfalt ve Yol Makineleri",
+    tagline: "Sıkıştırma, serim ve yol bakımı",
+    icon: "🛣️",
+    usageMetric: "saat",
+    subcategories: [
+      { slug: "asfalt-silindiri", name: "Asfalt Silindiri" },
+      { slug: "toprak-silindiri", name: "Toprak Silindiri" },
+      { slug: "yama-silindiri", name: "Yama Silindiri" },
+      { slug: "vabil-silindir", name: "Lastik Tekerlekli Vabıl Silindir" },
+      { slug: "el-silindiri", name: "Vibrasyonlu El Silindiri" },
+      { slug: "dozer", name: "Dozer" },
+      { slug: "finisher", name: "Finişer" },
+      { slug: "greyder", name: "Greyder" },
+      { slug: "kaya-delici", name: "Kaya/Rok Delici (Ankraj)" },
+      { slug: "asfalt-kazima", name: "Asfalt Kazıma Makinası" },
+      { slug: "arazoz", name: "Su Tankeri (Arazöz)" },
+    ],
+    specFields: [
+      F.operasyonAgirligi([1, 3, 7, 12, 18, 25]),
+      F.motorGucu([100, 150, 200, 300]),
+      { key: "calismaGenisligi", label: "Çalışma / Serim Genişliği", type: "number", unit: "cm" },
+      { key: "serimGenisligi", label: "Serim Genişliği", type: "number", unit: "m" },
+      { key: "hacim", label: "Tank Hacmi", type: "number", unit: "m³" },
+      { key: "bolmeSayisi", label: "Bölme Sayısı", type: "number", unit: "adet" },
+    ],
+  },
+
+  // ───────────────────────── VİNÇLER VE PLATFORMLAR ─────────────────────────
+  {
+    slug: "vinc-platform",
+    name: "Vinçler ve Platformlar",
+    tagline: "Ağır kaldırma ve yüksekte erişim",
     icon: "🏗️",
     usageMetric: "saat",
     subcategories: [
-      { slug: "lastikli", name: "Lastikli Yükleyici" },
-      { slug: "mini", name: "Mini Yükleyici (Bobcat)" },
+      { slug: "kule-vinc", name: "Kule Vinç" },
+      { slug: "hiyap-vinc", name: "Hiyap (Araç Üstü) Vinç" },
+      { slug: "mobil-vinc", name: "Mobil (Teleskopik) Vinç" },
+      { slug: "sepetli-vinc", name: "Araç Üstü Sepetli Vinç" },
+      { slug: "orumcek-vinc", name: "Örümcek Vinç" },
+      { slug: "paletli-vinc", name: "Paletli Vinç" },
+      { slug: "makasli-platform", name: "Makaslı Platform" },
+      { slug: "mini-makasli-platform", name: "Mini Makaslı Platform" },
+      { slug: "eklemli-platform", name: "Eklemli Platform" },
+      { slug: "dikey-platform", name: "Dikey Platform" },
+      { slug: "orumcek-platform", name: "Paletli Örümcek Platform" },
+      { slug: "teleskopik-platform", name: "Teleskopik Bomlu Platform" },
+      { slug: "insaat-asansoru", name: "İnşaat Asansörü" },
+      { slug: "dis-cephe-platformu", name: "Dış Cephe Platformu" },
     ],
     specFields: [
-      { key: "kovaKapasitesi", label: "Kova Kapasitesi", type: "number", unit: "m³", filterable: true, steps: [1, 2, 3, 4, 5] },
-      { key: "operasyonAgirligi", label: "Operasyon Ağırlığı", type: "number", unit: "ton", filterable: true, steps: [5, 10, 15, 20] },
-      { key: "motorGucu", label: "Motor Gücü", type: "number", unit: "HP" },
-    ],
-  },
-  {
-    slug: "forklift",
-    name: "Forklift",
-    group: "is-makinesi",
-    tagline: "İstifleme ve yük taşıma",
-    icon: "🛻",
-    usageMetric: "saat",
-    subcategories: [
-      { slug: "dizel", name: "Dizel Forklift" },
-      { slug: "elektrikli", name: "Elektrikli Forklift" },
-      { slug: "lpg", name: "LPG'li Forklift" },
-    ],
-    specFields: [
-      { key: "kaldirmaKapasitesi", label: "Kaldırma Kapasitesi", type: "number", unit: "kg", filterable: true, steps: [1500, 2500, 3500, 5000, 10000] },
-      { key: "asansorYuksekligi", label: "Asansör Yüksekliği", type: "number", unit: "m", filterable: true, steps: [3, 4, 5, 6] },
-      { key: "yuruyusTipi", label: "Yürüyüş Tipi", type: "select", options: ["Lastik", "Dolgu Lastik"] },
-    ],
-  },
-  {
-    slug: "vinc",
-    name: "Vinç",
-    group: "is-makinesi",
-    tagline: "Ağır kaldırma operasyonları",
-    icon: "🏗️",
-    usageMetric: "saat",
-    subcategories: [
-      { slug: "mobil", name: "Mobil Vinç" },
-      { slug: "kule", name: "Kule Vinç" },
-      { slug: "sepetli", name: "Sepetli Vinç (Araç Üstü)" },
-      { slug: "paletli", name: "Paletli Vinç" },
-    ],
-    specFields: [
-      { key: "kaldirmaKapasitesi", label: "Kaldırma Kapasitesi", type: "number", unit: "ton", filterable: true, steps: [10, 25, 50, 100, 200, 400] },
+      F.kaldirmaKapasitesi("ton", [2, 10, 25, 50, 100, 200, 400]),
       { key: "bomUzunlugu", label: "Bom Uzunluğu", type: "number", unit: "m", filterable: true, steps: [20, 30, 40, 60] },
       { key: "erisimYuksekligi", label: "Erişim Yüksekliği", type: "number", unit: "m" },
-    ],
-  },
-  {
-    slug: "manlift",
-    name: "Manlift / Platform",
-    group: "is-makinesi",
-    tagline: "Yüksekte personel erişimi",
-    icon: "🪜",
-    usageMetric: "saat",
-    subcategories: [
-      { slug: "makasli", name: "Makaslı Platform" },
-      { slug: "eklemli", name: "Eklemli Platform" },
-      { slug: "teleskopik", name: "Teleskopik Platform" },
-    ],
-    specFields: [
-      { key: "calismaYuksekligi", label: "Çalışma Yüksekliği", type: "number", unit: "m", filterable: true, steps: [10, 16, 22, 30, 40] },
+      F.calismaYuksekligi([8, 10, 16, 22, 30, 40]),
       { key: "platformKapasitesi", label: "Platform Kapasitesi", type: "number", unit: "kg" },
       { key: "tahrik", label: "Tahrik", type: "select", options: ["Dizel", "Elektrik", "Hibrit"] },
     ],
   },
+
+  // ───────────────────────── FORKLİFTLER ─────────────────────────
   {
-    slug: "silindir",
-    name: "Silindir",
-    group: "is-makinesi",
-    tagline: "Toprak ve asfalt sıkıştırma",
-    icon: "🛢️",
+    slug: "forklift",
+    name: "Forkliftler",
+    tagline: "İstifleme ve yük taşıma",
+    icon: "🛻",
     usageMetric: "saat",
     subcategories: [
-      { slug: "toprak", name: "Toprak Silindiri" },
-      { slug: "asfalt", name: "Asfalt Silindiri" },
-      { slug: "tandem", name: "Tandem Silindir" },
+      { slug: "telehandler", name: "Telehandler (Teleskopik Yükleyici)" },
+      { slug: "dizel", name: "Dizel Forklift" },
+      { slug: "elektrikli", name: "Elektrikli Forklift" },
+      { slug: "lpg-benzinli", name: "LPG & Benzinli Forklift" },
+      { slug: "reach-truck", name: "Reach Truck" },
+      { slug: "akulu-istif", name: "Akülü İstif Makinası" },
+      { slug: "akulu-transpalet", name: "Akülü Transpalet" },
     ],
     specFields: [
-      { key: "operasyonAgirligi", label: "Operasyon Ağırlığı", type: "number", unit: "ton", filterable: true, steps: [3, 7, 12, 18] },
-      { key: "calismaGenisligi", label: "Çalışma Genişliği", type: "number", unit: "cm" },
-    ],
-  },
-  {
-    slug: "dozer",
-    name: "Dozer",
-    group: "is-makinesi",
-    tagline: "Tesviye ve itme işleri",
-    icon: "🚜",
-    usageMetric: "saat",
-    subcategories: [{ slug: "paletli", name: "Paletli Dozer" }],
-    specFields: [
-      { key: "motorGucu", label: "Motor Gücü", type: "number", unit: "HP", filterable: true, steps: [150, 200, 300, 400] },
-      { key: "operasyonAgirligi", label: "Operasyon Ağırlığı", type: "number", unit: "ton" },
-    ],
-  },
-  {
-    slug: "beton-pompasi",
-    name: "Beton Pompası",
-    group: "is-makinesi",
-    tagline: "Beton iletim ve pompalama",
-    icon: "🏭",
-    usageMetric: "saat",
-    subcategories: [
-      { slug: "arac-ustu", name: "Araç Üstü Pompa" },
-      { slug: "sabit", name: "Sabit Pompa" },
-    ],
-    specFields: [
-      { key: "erisimMesafesi", label: "Erişim Mesafesi", type: "number", unit: "m", filterable: true, steps: [24, 32, 42, 52] },
-      { key: "debi", label: "Pompalama Debisi", type: "number", unit: "m³/sa" },
-    ],
-  },
-  {
-    slug: "jenerator",
-    name: "Jeneratör",
-    group: "is-makinesi",
-    tagline: "Geçici enerji çözümü",
-    icon: "⚡",
-    usageMetric: "saat",
-    subcategories: [
-      { slug: "dizel", name: "Dizel Jeneratör" },
-      { slug: "kabinli", name: "Kabinli Jeneratör" },
-    ],
-    specFields: [
-      { key: "guc", label: "Güç", type: "number", unit: "kVA", filterable: true, steps: [30, 60, 100, 250, 500] },
-      { key: "kabin", label: "Kabin", type: "boolean" },
+      F.kaldirmaKapasitesi("kg", [1500, 2500, 3500, 5000, 10000]),
+      { key: "asansorYuksekligi", label: "Kaldırma Yüksekliği", type: "number", unit: "m", filterable: true, steps: [3, 4, 5, 6] },
+      { key: "yuruyusTipi", label: "Yürüyüş Tipi", type: "select", options: ["Lastik", "Dolgu Lastik"] },
+      F.calismaYuksekligi(),
     ],
   },
 
-  // ───────────────────────── AĞIR VASITALAR ─────────────────────────
+  // ───────────────────────── JENERATÖRLER ─────────────────────────
   {
-    slug: "kamyon",
-    name: "Kamyon",
-    group: "agir-vasita",
-    tagline: "Yük ve hafriyat taşıma",
-    icon: "🚚",
-    usageMetric: "km",
+    slug: "jenerator",
+    name: "Jeneratörler",
+    tagline: "Enerji, aydınlatma ve basınçlı hava",
+    icon: "⚡",
+    usageMetric: "saat",
     subcategories: [
-      { slug: "damperli", name: "Damperli Kamyon" },
-      { slug: "kasali", name: "Kasalı Kamyon" },
-      { slug: "tenteli", name: "Tenteli Kamyon" },
-      { slug: "frigorifik", name: "Frigorifik Kamyon" },
+      { slug: "kabinli-dizel", name: "Kabinli Dizel Jeneratör" },
+      { slug: "portatif-dizel", name: "Portatif Dizel Jeneratör" },
+      { slug: "portatif-benzinli", name: "Portatif Benzinli Jeneratör" },
+      { slug: "mobil", name: "Mobil Jeneratör" },
+      { slug: "romorklu", name: "Römorklu Jeneratör" },
+      { slug: "aydinlatma-kulesi", name: "Aydınlatma Kulesi" },
+      { slug: "kompresor", name: "Kompresör" },
     ],
     specFields: [
-      { key: "tonaj", label: "Tonaj", type: "number", unit: "ton", filterable: true, steps: [10, 18, 26, 32] },
-      { key: "dingil", label: "Dingil", type: "select", options: ["4x2", "6x2", "6x4", "8x4"], filterable: true },
-      { key: "kasaUzunlugu", label: "Kasa Uzunluğu", type: "number", unit: "m" },
-    ],
-  },
-  {
-    slug: "cekici",
-    name: "Çekici (TIR)",
-    group: "agir-vasita",
-    tagline: "Uzun yol ve dorse çekişi",
-    icon: "🚛",
-    usageMetric: "km",
-    subcategories: [
-      { slug: "standart", name: "Standart Çekici" },
-      { slug: "low-deck", name: "Alçak Kabin (Low-Deck)" },
-    ],
-    specFields: [
-      { key: "motorGucu", label: "Motor Gücü", type: "number", unit: "HP", filterable: true, steps: [420, 480, 500, 540] },
-      { key: "dingil", label: "Dingil", type: "select", options: ["4x2", "6x2", "6x4"], filterable: true },
-      { key: "yatakli", label: "Yataklı Kabin", type: "boolean" },
-    ],
-  },
-  {
-    slug: "dorse",
-    name: "Dorse / Römork",
-    group: "agir-vasita",
-    tagline: "Çekici arkası taşıma çözümü",
-    icon: "🚙",
-    usageMetric: "km",
-    subcategories: [
-      { slug: "lowbed", name: "Lowbed (Havuzlu)" },
-      { slug: "tanker", name: "Tanker Dorse" },
-      { slug: "silobas", name: "Silobas" },
-      { slug: "platform", name: "Platform Dorse" },
-      { slug: "damperli", name: "Damperli Dorse" },
-    ],
-    specFields: [
-      { key: "tasimaKapasitesi", label: "Taşıma Kapasitesi", type: "number", unit: "ton", filterable: true, steps: [25, 40, 60, 80] },
-      { key: "dingilSayisi", label: "Dingil Sayısı", type: "number", unit: "adet" },
-      { key: "uzunluk", label: "Uzunluk", type: "number", unit: "m" },
-    ],
-  },
-  {
-    slug: "tanker",
-    name: "Tanker",
-    group: "agir-vasita",
-    tagline: "Su / akaryakıt taşıma",
-    icon: "🛢️",
-    usageMetric: "km",
-    subcategories: [
-      { slug: "su", name: "Su Tankeri" },
-      { slug: "akaryakit", name: "Akaryakıt Tankeri" },
-      { slug: "vidanjor", name: "Vidanjör" },
-    ],
-    specFields: [
-      { key: "hacim", label: "Tank Hacmi", type: "number", unit: "m³", filterable: true, steps: [10, 20, 30, 40] },
-      { key: "bolmeSayisi", label: "Bölme Sayısı", type: "number", unit: "adet" },
+      F.guc([10, 30, 60, 100, 250, 500]),
+      { key: "kabin", label: "Kabin", type: "boolean" },
+      { key: "havaDebisi", label: "Hava Debisi", type: "number", unit: "m³/dk" },
+      { key: "basinc", label: "Basınç", type: "number", unit: "bar" },
+      { key: "kuleYuksekligi", label: "Kule Yüksekliği", type: "number", unit: "m" },
     ],
   },
 ];
@@ -257,10 +228,6 @@ export const CATEGORIES: Category[] = [
 export function getCategory(slug: string | undefined): Category | undefined {
   if (!slug) return undefined;
   return CATEGORIES.find((c) => c.slug === slug);
-}
-
-export function getCategoriesByGroup(group: Category["group"]): Category[] {
-  return CATEGORIES.filter((c) => c.group === group);
 }
 
 export function getFilterableSpecFields(categorySlug: string | undefined) {
@@ -273,8 +240,3 @@ export function getSubCategoryName(categorySlug: string, subSlug: string): strin
   const cat = getCategory(categorySlug);
   return cat?.subcategories.find((s) => s.slug === subSlug)?.name ?? subSlug;
 }
-
-export const GROUP_LABELS: Record<Category["group"], string> = {
-  "is-makinesi": "İş Makineleri",
-  "agir-vasita": "Ağır Vasıtalar",
-};

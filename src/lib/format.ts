@@ -27,7 +27,7 @@ export function formatPriceWithPeriod(value: number, period: RentalPeriod): stri
 
 /** İlanın gösterilecek "ana" fiyatını seçer: günlük > saatlik > haftalık > aylık */
 export function primaryPrice(prices: PriceMap): { value: number; period: RentalPeriod } | null {
-  const order: RentalPeriod[] = ["gunluk", "saatlik", "haftalik", "aylik"];
+  const order: RentalPeriod[] = ["gunluk", "saatlik", "haftalik", "aylik", "yillik"];
   for (const period of order) {
     const value = prices[period];
     if (value != null) return { value, period };

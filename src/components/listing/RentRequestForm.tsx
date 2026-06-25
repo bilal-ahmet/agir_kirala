@@ -11,6 +11,9 @@ import { daysBetween, formatPrice, primaryPrice } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Label, Select, Textarea } from "@/components/ui/Field";
 import { CheckIcon } from "@/components/ui/icons";
+import { useRentalSelection } from "./rental-selection";
+
+const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`);
 
 /** Periyot başına süre adedini hesaplar */
 function quantityFor(period: RentalPeriod, days: number): number {
@@ -19,6 +22,7 @@ function quantityFor(period: RentalPeriod, days: number): number {
     case "gunluk": return Math.max(1, days);
     case "haftalik": return Math.max(1, Math.ceil(days / 7));
     case "aylik": return Math.max(1, Math.ceil(days / 30));
+    case "yillik": return Math.max(1, Math.ceil(days / 365));
   }
 }
 
@@ -30,8 +34,8 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
   const availablePeriods = PERIODS.filter((p) => listing.prices[p.value] != null);
   const defaultPeriod = primaryPrice(listing.prices)?.period ?? availablePeriods[0]?.value ?? "gunluk";
 
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const { start, end, startTime, endTime, setStart, setEnd, setStartTime, setEndTime } =
+    useRentalSelection();
   const [period, setPeriod] = useState<RentalPeriod>(defaultPeriod);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +69,12 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
     }
     if (!calc) return setError("Tutar hesaplanamadı.");
 
+    const timeNote =
+      startTime || endTime
+        ? `Saat: ${startTime || "—"}${endTime ? `–${endTime}` : ""}`
+        : "";
+    const fullMessage = [message.trim(), timeNote].filter(Boolean).join("\n");
+
     addLocalRequest({
       id: `r-${Date.now()}`,
       listingId: listing.id,
@@ -73,7 +83,7 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
       startDate: start,
       endDate: end,
       period,
-      message: message.trim(),
+      message: fullMessage,
       status: "beklemede",
       createdAt: new Date().toISOString(),
       totalPrice: calc.total,
@@ -113,11 +123,27 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Başlangıç">
+        <Field label="Başlangıç Tarihi">
           <Input type="date" min={todayStr} value={start} onChange={(e) => setStart(e.target.value)} />
         </Field>
-        <Field label="Bitiş">
+        <Field label="Bitiş Tarihi">
           <Input type="date" min={start || todayStr} value={end} onChange={(e) => setEnd(e.target.value)} />
+        </Field>
+        <Field label="Başlangıç Saati">
+          <Select value={startTime} onChange={(e) => setStartTime(e.target.value)}>
+            <option value="">Saat seçin</option>
+            {HOURS.map((h) => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Bitiş Saati">
+          <Select value={endTime} onChange={(e) => setEndTime(e.target.value)}>
+            <option value="">Saat seçin</option>
+            {HOURS.map((h) => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </Select>
         </Field>
       </div>
 

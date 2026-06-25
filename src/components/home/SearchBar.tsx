@@ -2,14 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CATEGORIES, GROUP_LABELS } from "@/lib/categories";
+import { CATEGORIES } from "@/lib/categories";
 import { PROVINCE_NAMES } from "@/lib/locations";
-import type { CategoryGroup } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
-
-const GROUPS: CategoryGroup[] = ["is-makinesi", "agir-vasita"];
 
 export function SearchBar({ className }: { className?: string }) {
   const router = useRouter();
@@ -56,14 +53,10 @@ export function SearchBar({ className }: { className?: string }) {
           aria-label="Kategori"
         >
           <option value="">Tüm Kategoriler</option>
-          {GROUPS.map((group) => (
-            <optgroup key={group} label={GROUP_LABELS[group]}>
-              {CATEGORIES.filter((c) => c.group === group).map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
+          {CATEGORIES.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.name}
+            </option>
           ))}
         </select>
 

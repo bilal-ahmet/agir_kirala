@@ -11,6 +11,15 @@ export const PERIODS: { value: RentalPeriod; label: string; short: string }[] = 
   { value: "gunluk", label: "Günlük", short: "gün" },
   { value: "haftalik", label: "Haftalık", short: "hafta" },
   { value: "aylik", label: "Aylık", short: "ay" },
+  { value: "yillik", label: "Yıllık", short: "yıl" },
+];
+
+/** İlan ekleme formunda sunulan fiyatlandırma periyotları: saat / gün / ay / yıl */
+export const LISTING_PERIODS: { value: RentalPeriod; label: string; short: string }[] = [
+  { value: "saatlik", label: "Saatlik", short: "saat" },
+  { value: "gunluk", label: "Günlük", short: "gün" },
+  { value: "aylik", label: "Aylık", short: "ay" },
+  { value: "yillik", label: "Yıllık", short: "yıl" },
 ];
 
 export const PERIOD_LABELS: Record<RentalPeriod, string> = {
@@ -18,6 +27,7 @@ export const PERIOD_LABELS: Record<RentalPeriod, string> = {
   gunluk: "Günlük",
   haftalik: "Haftalık",
   aylik: "Aylık",
+  yillik: "Yıllık",
 };
 
 /** Bir periyodun yaklaşık gün karşılığı (toplam tutar tahmini için) */
@@ -26,6 +36,7 @@ export const PERIOD_IN_DAYS: Record<RentalPeriod, number> = {
   gunluk: 1,
   haftalik: 7,
   aylik: 30,
+  yillik: 365,
 };
 
 export const FUEL_LABELS: Record<FuelType, string> = {
