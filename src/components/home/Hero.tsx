@@ -32,18 +32,7 @@ export function Hero() {
 
         <SearchBar className="mt-8 max-w-4xl" />
 
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-faint">Popüler:</span>
-          {quickCats.map((c) => (
-            <Link
-              key={c.slug}
-              href={`/ilanlar?kategori=${c.slug}`}
-              className="rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted transition-colors hover:border-accent/40 hover:text-accent"
-            >
-              {c.icon} {c.name}
-            </Link>
-          ))}
-        </div>
+        
       </div>
     </section>
   );

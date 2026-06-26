@@ -10,9 +10,8 @@ import {
   MIN_YEAR,
   OWNER_TYPE_LABELS,
   PERIODS,
-  TRANSPORT_LABELS,
 } from "@/lib/constants";
-import type { FuelType, OwnerType, TransportOption } from "@/lib/types";
+import type { FuelType, OwnerType } from "@/lib/types";
 import { Input, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
@@ -183,15 +182,10 @@ export function FilterControls() {
         </div>
       </Section>
 
-      {/* Nakliye */}
+      {/* Nakliye — tek sabit politika */}
       <Section title="Nakliye / Teslimat">
-        <Select value={sp.get("nakliye") || ""} onChange={(e) => setParam("nakliye", e.target.value)}>
-          <option value="">Farketmez</option>
-          {(["dahil", "ekstra", "yok"] as TransportOption[]).map((t) => (
-            <option key={t} value={t}>
-              {TRANSPORT_LABELS[t]}
-            </option>
-          ))}
+        <Select value="yok" disabled>
+          <option value="yok">Nakliye Yok (Müşteri Alır)</option>
         </Select>
       </Section>
 

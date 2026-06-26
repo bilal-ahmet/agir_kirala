@@ -58,12 +58,6 @@ function IlanlarimInner() {
     return c;
   }, [allListings]);
 
-  // Kullanıcının ilanlarında bulunan kategoriler (filtre seçenekleri)
-  const usedCategories = useMemo(() => {
-    const slugs = new Set(allListings.map((l) => l.categorySlug));
-    return CATEGORIES.filter((c) => slugs.has(c.slug));
-  }, [allListings]);
-
   const listings = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("tr");
     return allListings.filter((l) => {
@@ -126,7 +120,7 @@ function IlanlarimInner() {
               className="sm:w-56"
             >
               <option value="">Tüm Kategoriler</option>
-              {usedCategories.map((c) => (
+              {CATEGORIES.map((c) => (
                 <option key={c.slug} value={c.slug}>{c.name}</option>
               ))}
             </Select>

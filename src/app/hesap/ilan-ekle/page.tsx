@@ -296,16 +296,22 @@ export default function IlanEklePage() {
                 ))}
               </Select>
             </Field>
-            {category && (
-              <Field label="Alt Kategori" required>
-                <Select value={form.subCategorySlug} onChange={(e) => set({ subCategorySlug: e.target.value })}>
-                  <option value="">Seçin</option>
-                  {category.subcategories.map((s) => (
-                    <option key={s.slug} value={s.slug}>{s.name}</option>
-                  ))}
-                </Select>
-              </Field>
-            )}
+            <Field
+              label="Alt Kategori"
+              required
+              hint={!category ? "Önce kategori seçin." : undefined}
+            >
+              <Select
+                value={form.subCategorySlug}
+                onChange={(e) => set({ subCategorySlug: e.target.value })}
+                disabled={!category}
+              >
+                <option value="">{category ? "Seçin" : "Önce kategori seçin"}</option>
+                {(category?.subcategories ?? []).map((s) => (
+                  <option key={s.slug} value={s.slug}>{s.name}</option>
+                ))}
+              </Select>
+            </Field>
           </div>
         )}
 
