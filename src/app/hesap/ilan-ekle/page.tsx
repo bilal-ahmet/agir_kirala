@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { addLocalListing } from "@/lib/storage";
 import { CATEGORIES, getCategory } from "@/lib/categories";
-import { brandsForCategory } from "@/lib/brands";
+import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
   FUEL_LABELS,
@@ -297,7 +297,7 @@ export default function IlanEklePage() {
             <Field label="Kategori" required>
               <Select
                 value={form.categorySlug}
-                onChange={(e) => set({ categorySlug: e.target.value, subCategorySlug: "", specs: {} })}
+                onChange={(e) => set({ categorySlug: e.target.value, subCategorySlug: "", brand: "", specs: {} })}
               >
                 <option value="">Seçin</option>
                 {CATEGORIES.map((c) => (
@@ -312,7 +312,7 @@ export default function IlanEklePage() {
             >
               <Select
                 value={form.subCategorySlug}
-                onChange={(e) => set({ subCategorySlug: e.target.value })}
+                onChange={(e) => set({ subCategorySlug: e.target.value, brand: "" })}
                 disabled={!category}
               >
                 <option value="">{category ? "Seçin" : "Önce kategori seçin"}</option>
@@ -331,11 +331,11 @@ export default function IlanEklePage() {
               <Input value={form.title} onChange={(e) => set({ title: e.target.value })} placeholder="Örn. Caterpillar 320 Paletli Ekskavatör" />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Marka" required>
+              <Field label="Marka" required hint="Seçilen alt kategoriye göre listelenir.">
                 <Select value={form.brand} onChange={(e) => set({ brand: e.target.value })}>
                   <option value="">Seçin</option>
-                  {brandsForCategory(form.categorySlug).map((b) => (
-                    <option key={b} value={b}>{b}</option>
+                  {brandsForSubcategory(form.categorySlug, form.subCategorySlug).map((b) => (
+                    <option key={b} value={b}>{isTurkishBrand(b) ? `${b} (Yerli)` : b}</option>
                   ))}
                 </Select>
               </Field>

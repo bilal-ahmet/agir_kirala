@@ -2,7 +2,7 @@
 
 import { useFilters } from "./use-filters";
 import { CATEGORIES, getCategory, getFilterableSpecFields } from "@/lib/categories";
-import { brandsForCategory } from "@/lib/brands";
+import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
   FUEL_LABELS,
@@ -19,6 +19,7 @@ export function FilterControls() {
   const { sp, setParam, toggleInList, update } = useFilters();
 
   const kategori = sp.get("kategori") || "";
+  const altKategori = sp.get("altKategori") || "";
   const category = getCategory(kategori);
   const selectedBrands = (sp.get("marka") || "").split(",").filter(Boolean);
   const il = sp.get("il") || "";
@@ -52,8 +53,15 @@ export function FilterControls() {
         {category && (
           <Select
             className="mt-2"
-            value={sp.get("altKategori") || ""}
-            onChange={(e) => setParam("altKategori", e.target.value)}
+            value={altKategori}
+            onChange={(e) =>
+              update((p) => {
+                const v = e.target.value;
+                if (v) p.set("altKategori", v);
+                else p.delete("altKategori");
+                p.delete("marka");
+              })
+            }
           >
             <option value="">Tüm Alt Kategoriler</option>
             {category.subcategories.map((s) => (
@@ -126,15 +134,21 @@ export function FilterControls() {
         />
       </Section>
 
-      {/* Marka */}
+      {/* Marka — seçilen alt kategoriye göre */}
       <Section title="Marka">
+        {category && !altKategori && (
+          <p className="mb-2 -mt-1 text-xs text-faint">
+            Markaları daraltmak için alt kategori seçin.
+          </p>
+        )}
         <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
-          {brandsForCategory(kategori).map((brand) => (
+          {brandsForSubcategory(kategori, altKategori).map((brand) => (
             <CheckRow
               key={brand}
               label={brand}
               checked={selectedBrands.includes(brand)}
               onChange={() => toggleInList("marka", brand)}
+              badge={isTurkishBrand(brand) ? "Yerli" : undefined}
             />
           ))}
         </div>
@@ -268,11 +282,13 @@ function CheckRow({
   checked,
   onChange,
   className,
+  badge,
 }: {
   label: string;
   checked: boolean;
   onChange: () => void;
   className?: string;
+  badge?: React.ReactNode;
 }) {
   return (
     <label className={cn("flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1.5 text-sm text-muted hover:text-fg", className)}>
@@ -289,7 +305,12 @@ function CheckRow({
         )}
       </span>
       <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
-      {label}
+      <span>{label}</span>
+      {badge && (
+        <span className="ml-auto rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+          {badge}
+        </span>
+      )}
     </label>
   );
 }
