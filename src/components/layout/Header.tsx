@@ -18,6 +18,7 @@ import {
   MenuIcon,
   MessageIcon,
   PlusIcon,
+  SearchIcon,
   UserIcon,
 } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
@@ -92,6 +93,10 @@ export function Header() {
                 {count}
               </span>
             )}
+          </Link>
+
+          <Link href="/ilanlar" className={buttonClasses("accent", "sm", "hidden sm:inline-flex")}>
+            <SearchIcon size={16} /> İlan Ara
           </Link>
 
           <Link href="/hesap/ilan-ekle" className={buttonClasses("accent", "sm", "hidden sm:inline-flex")}>

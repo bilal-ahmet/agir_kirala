@@ -191,9 +191,18 @@ export default function IlanEklePage() {
     router.push("/hesap/ilanlarim?durum=taslak");
   };
 
+  // Yayın için zorunlu fiyat alanları (saatlik + günlük)
+  const missingPrices = (): string[] => {
+    const m: string[] = [];
+    if (!parsedPrices.saatlik) m.push("Saatlik Ücret");
+    if (!parsedPrices.gunluk) m.push("Günlük Ücret");
+    return m;
+  };
+
   const publish = () => {
-    if (Object.keys(parsedPrices).length === 0) {
-      setError("En az bir fiyatlandırma periyodu girin.");
+    const m = missingPrices();
+    if (m.length > 0) {
+      setError(`Yayınlamak için zorunlu alanlar: ${m.join(", ")}.`);
       setPreviewing(false);
       setStep(3);
       return;
@@ -459,19 +468,25 @@ export default function IlanEklePage() {
         {step === 3 && (
           <div className="space-y-5">
             <div>
-              <Label required>Fiyatlandırma (₺) — en az bir periyot</Label>
+              <Label required>Fiyatlandırma (₺)</Label>
+              <p className="mb-2 -mt-1 text-xs text-faint">
+                Saatlik ve günlük ücret zorunludur. Aylık/yıllık opsiyoneldir.
+              </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {LISTING_PERIODS.map((p) => (
-                  <Field key={p.value} label={p.label}>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={form.prices[p.value] ?? ""}
-                      onChange={(e) => set({ prices: { ...form.prices, [p.value]: e.target.value } })}
-                      placeholder="₺"
-                    />
-                  </Field>
-                ))}
+                {LISTING_PERIODS.map((p) => {
+                  const req = p.value === "saatlik" || p.value === "gunluk";
+                  return (
+                    <Field key={p.value} label={p.label} required={req}>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.prices[p.value] ?? ""}
+                        onChange={(e) => set({ prices: { ...form.prices, [p.value]: e.target.value } })}
+                        placeholder="₺"
+                      />
+                    </Field>
+                  );
+                })}
               </div>
             </div>
 
@@ -511,7 +526,17 @@ export default function IlanEklePage() {
               <Button variant="outline" onClick={saveDraft}>
                 Taslak Kaydet
               </Button>
-              <Button onClick={() => { setError(null); setPreviewing(true); }}>
+              <Button
+                onClick={() => {
+                  const m = missingPrices();
+                  if (m.length > 0) {
+                    setError(`Yayınlamak için zorunlu alanlar: ${m.join(", ")}.`);
+                    return;
+                  }
+                  setError(null);
+                  setPreviewing(true);
+                }}
+              >
                 Önizle ve Yayınla ›
               </Button>
             </div>

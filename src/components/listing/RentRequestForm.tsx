@@ -26,6 +26,14 @@ function quantityFor(period: RentalPeriod, days: number): number {
   }
 }
 
+/** İki saat ("08:00", "10:00") arasındaki tam saat farkı */
+function hoursBetween(start: string, end: string): number {
+  if (!start || !end) return 0;
+  const sh = Number(start.slice(0, 2));
+  const eh = Number(end.slice(0, 2));
+  return Math.max(0, eh - sh);
+}
+
 export function RentRequestForm({ listing }: { listing: Listing }) {
   const { user } = useAuth();
   const router = useRouter();
@@ -51,8 +59,15 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
     if (unit == null) return null;
     const qty = quantityFor(period, days);
     const unitLabel = PERIODS.find((p) => p.value === period)?.short ?? "";
-    return { days, qty, total: unit * qty, unitLabel };
-  }, [start, end, period, listing.prices]);
+    const base = unit * qty;
+
+    // Gün bazlı kiralamada saatlik ek ücret (başlangıç–bitiş saati seçilmişse)
+    const hourly = listing.prices.saatlik ?? 0;
+    const hours = period !== "saatlik" && hourly > 0 ? hoursBetween(startTime, endTime) : 0;
+    const hourAddon = hours * hourly;
+
+    return { days, qty, unit, unitLabel, base, hourly, hours, hourAddon, total: base + hourAddon };
+  }, [start, end, period, startTime, endTime, listing.prices]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,9 +187,15 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
       {calc && (
         <div className="rounded-lg border border-line bg-surface-2 p-3 text-sm">
           <div className="flex justify-between text-muted">
-            <span>{calc.days} gün · {calc.qty} {calc.unitLabel}</span>
-            <span>{formatPrice(listing.prices[period]!)} × {calc.qty}</span>
+            <span>{calc.qty} {calc.unitLabel}{calc.unitLabel === "gün" ? "" : ` (${calc.days} gün)`}</span>
+            <span>{formatPrice(calc.unit)} × {calc.qty} = {formatPrice(calc.base)}</span>
           </div>
+          {calc.hours > 0 && (
+            <div className="mt-1 flex justify-between text-muted">
+              <span>+ {calc.hours} saat ({startTime}–{endTime})</span>
+              <span>{formatPrice(calc.hourly)} × {calc.hours} = {formatPrice(calc.hourAddon)}</span>
+            </div>
+          )}
           <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
             <span className="font-semibold">Tahmini Toplam</span>
             <span className="text-lg font-extrabold text-accent">{formatPrice(calc.total)}</span>
