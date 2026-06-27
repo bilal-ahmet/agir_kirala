@@ -5,6 +5,7 @@ import { getCategory } from "@/lib/categories";
 import { formatNumber } from "@/lib/format";
 import { ListingGrid } from "@/components/listing/ListingGrid";
 import { FilterPanel } from "@/components/search/FilterPanel";
+import { UrlFilterProvider } from "@/components/search/filter-controller";
 import { MobileFilterBar } from "@/components/search/MobileFilterBar";
 import { ActiveFilterChips } from "@/components/search/ActiveFilterChips";
 import { SortSelect } from "@/components/search/SortSelect";
@@ -64,7 +65,9 @@ export default async function IlanlarPage({
         {/* Masaüstü filtre kenar çubuğu */}
         <aside className="hidden w-72 shrink-0 lg:block">
           <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-lg border border-line bg-surface p-4 no-scrollbar">
-            <FilterPanel />
+            <UrlFilterProvider>
+              <FilterPanel />
+            </UrlFilterProvider>
           </div>
         </aside>
 

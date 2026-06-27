@@ -1,8 +1,12 @@
 import { Hero } from "@/components/home/Hero";
 import { CategoryGrid } from "@/components/home/CategoryGrid";
-import { FeaturedListings } from "@/components/home/FeaturedListings";
+import { ExploreSection } from "@/components/home/ExploreSection";
 import { HowItWorks } from "@/components/home/HowItWorks";
+import { ListingGrid } from "@/components/listing/ListingGrid";
+import { activeListings } from "@/lib/data/listings";
 import { ShieldCheckIcon, TruckIcon, ClockIcon, UserIcon } from "@/components/ui/icons";
+
+const HOME_GRID_SIZE = 9;
 
 const TRUST = [
   { icon: <ShieldCheckIcon />, title: "Doğrulanmış Firmalar", text: "Kurumsal satıcılar kimlik doğrulamasından geçer." },
@@ -12,6 +16,15 @@ const TRUST = [
 ];
 
 export default function HomePage() {
+  const all = activeListings();
+  const featured = all.filter((l) => l.featured);
+  // Her zaman dolu grid: öne çıkanlar yetmezse kalan aktif ilanlarla tamamla.
+  const gridItems = (
+    featured.length >= HOME_GRID_SIZE
+      ? featured
+      : [...featured, ...all.filter((l) => !l.featured)]
+  ).slice(0, HOME_GRID_SIZE);
+
   return (
     <>
       <Hero />
@@ -32,7 +45,10 @@ export default function HomePage() {
       </section>
 
       <CategoryGrid />
-      <FeaturedListings />
+      <ExploreSection
+        initialTotal={all.length}
+        resultsSlot={<ListingGrid listings={gridItems} />}
+      />
       <HowItWorks />
     </>
   );

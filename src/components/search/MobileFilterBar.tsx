@@ -5,6 +5,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { FilterPanel } from "./FilterPanel";
 import { SortSelect } from "./SortSelect";
 import { useFilters } from "./use-filters";
+import { UrlFilterProvider } from "./filter-controller";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { FilterIcon } from "@/components/ui/icons";
 import { parseFilters, activeFilterCount } from "@/lib/filters";
@@ -40,7 +41,9 @@ export function MobileFilterBar() {
           </Button>
         }
       >
-        <FilterPanel />
+        <UrlFilterProvider>
+          <FilterPanel />
+        </UrlFilterProvider>
       </Sheet>
     </div>
   );

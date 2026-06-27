@@ -1,6 +1,7 @@
 "use client";
 
-import { useFilters } from "./use-filters";
+import { useState } from "react";
+import { useFilterController } from "./filter-controller";
 import { CATEGORIES, getCategory, getFilterableSpecFields } from "@/lib/categories";
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
@@ -15,8 +16,8 @@ import type { FuelType, OwnerType } from "@/lib/types";
 import { Input, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
-export function FilterControls() {
-  const { sp, setParam, toggleInList, update } = useFilters();
+export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdvanced?: boolean } = {}) {
+  const { sp, setParam, toggleInList, update } = useFilterController();
 
   const kategori = sp.get("kategori") || "";
   const altKategori = sp.get("altKategori") || "";
@@ -156,7 +157,7 @@ export function FilterControls() {
 
       {/* Kategoriye özel teknik filtreler */}
       {category && getFilterableSpecFields(kategori).length > 0 && (
-        <Section title="Teknik Özellikler">
+        <Section title="Teknik Özellikler" collapsible={collapsibleAdvanced}>
           <div className="space-y-2">
             {getFilterableSpecFields(kategori).map((field) => (
               <div key={field.key}>
@@ -189,7 +190,7 @@ export function FilterControls() {
       )}
 
       {/* Model yılı */}
-      <Section title="Model Yılı">
+      <Section title="Model Yılı" collapsible={collapsibleAdvanced}>
         <div className="grid grid-cols-2 gap-2">
           <RangeInput keyName="minYil" placeholder={`En eski (${MIN_YEAR})`} type="number" />
           <RangeInput keyName="maxYil" placeholder={`En yeni (${MAX_YEAR})`} type="number" />
@@ -197,14 +198,14 @@ export function FilterControls() {
       </Section>
 
       {/* Nakliye — tek sabit politika */}
-      <Section title="Nakliye / Teslimat">
+      <Section title="Nakliye / Teslimat" collapsible={collapsibleAdvanced}>
         <Select value="yok" disabled>
           <option value="yok">Nakliye Yok (Müşteri Alır)</option>
         </Select>
       </Section>
 
       {/* Yakıt */}
-      <Section title="Yakıt Tipi">
+      <Section title="Yakıt Tipi" collapsible={collapsibleAdvanced}>
         <Select value={sp.get("yakit") || ""} onChange={(e) => setParam("yakit", e.target.value)}>
           <option value="">Farketmez</option>
           {(["dizel", "elektrik", "lpg", "benzin", "hibrit"] as FuelType[]).map((f) => (
@@ -216,7 +217,7 @@ export function FilterControls() {
       </Section>
 
       {/* Satıcı */}
-      <Section title="Satıcı">
+      <Section title="Satıcı" collapsible={collapsibleAdvanced}>
         <Segmented
           value={sp.get("saticiTipi") || ""}
           onChange={(v) => setParam("saticiTipi", v)}
@@ -239,11 +240,52 @@ export function FilterControls() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  collapsible = false,
+  defaultOpen = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  if (!collapsible) {
+    return (
+      <div className="py-4 first:pt-0">
+        <h3 className="mb-2.5 text-sm font-bold uppercase tracking-wide text-fg">{title}</h3>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="py-4 first:pt-0">
-      <h3 className="mb-2.5 text-sm font-bold uppercase tracking-wide text-fg">{title}</h3>
-      {children}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between text-sm font-bold uppercase tracking-wide text-fg"
+      >
+        <span>{title}</span>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={cn("text-muted transition-transform", open && "rotate-180")}
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && <div className="mt-2.5">{children}</div>}
     </div>
   );
 }
@@ -324,7 +366,7 @@ function RangeInput({
   placeholder: string;
   type?: string;
 }) {
-  const { sp, setParam } = useFilters();
+  const { sp, setParam } = useFilterController();
   const current = sp.get(keyName) || "";
   return (
     <Input

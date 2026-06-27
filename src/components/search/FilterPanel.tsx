@@ -1,12 +1,12 @@
 "use client";
 
 import { FilterControls } from "./FilterControls";
-import { useFilters } from "./use-filters";
+import { useFilterController } from "./filter-controller";
 import { parseFilters, activeFilterCount } from "@/lib/filters";
 
 /** Filtre kabuğu (başlık + temizle + kontroller). Sidebar ve mobil sheet'te kullanılır. */
-export function FilterPanel() {
-  const { sp, clearAll } = useFilters();
+export function FilterPanel({ collapsibleAdvanced = false }: { collapsibleAdvanced?: boolean } = {}) {
+  const { sp, clearAll } = useFilterController();
   const count = activeFilterCount(parseFilters(Object.fromEntries(sp.entries())));
 
   return (
@@ -19,7 +19,7 @@ export function FilterPanel() {
           </button>
         )}
       </div>
-      <FilterControls />
+      <FilterControls collapsibleAdvanced={collapsibleAdvanced} />
     </div>
   );
 }
