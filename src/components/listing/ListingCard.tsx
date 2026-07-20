@@ -9,7 +9,15 @@ import { Badge } from "@/components/ui/Badge";
 import { ClockIcon, GaugeIcon, MapPinIcon, ShieldCheckIcon, StarIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
-export function ListingCard({ listing, className }: { listing: Listing; className?: string }) {
+export function ListingCard({
+  listing,
+  className,
+  disableLink,
+}: {
+  listing: Listing;
+  className?: string;
+  disableLink?: boolean;
+}) {
   const category = getCategory(listing.categorySlug);
   const price = primaryPrice(listing.prices);
   const periodShort = price ? PERIODS.find((p) => p.value === price.period)?.short : "";
@@ -81,7 +89,9 @@ export function ListingCard({ listing, className }: { listing: Listing; classNam
       </div>
 
       {/* Tüm kartı tıklanabilir yapan gizli bağlantı */}
-      <Link href={`/ilanlar/${listing.id}`} className="absolute inset-0 z-0" aria-label={listing.title} />
+      {!disableLink && (
+        <Link href={`/ilanlar/${listing.id}`} className="absolute inset-0 z-0" aria-label={listing.title} />
+      )}
     </article>
   );
 }

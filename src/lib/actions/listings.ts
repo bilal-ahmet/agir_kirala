@@ -9,10 +9,13 @@ import { verifySession } from "../auth/session";
 import { getCategory } from "../categories";
 import type { Availability, FuelType, ListingStatus, PriceMap } from "../types";
 
-const priceMapSchema = z.record(
-  z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik"]),
-  z.number().positive(),
-);
+const priceMapSchema = z.object({
+  saatlik: z.number().positive().optional(),
+  gunluk: z.number().positive().optional(),
+  haftalik: z.number().positive().optional(),
+  aylik: z.number().positive().optional(),
+  yillik: z.number().positive().optional(),
+});
 
 const availabilitySchema = z.object({
   weekdays: z.array(z.number().int().min(0).max(6)),
@@ -80,9 +83,9 @@ export async function createListingAction(
     return { error: "Geçersiz kategori seçimi." };
   }
 
-  // Yayınlamak için saatlik + günlük ücret zorunlu.
-  if (d.status === "aktif" && (d.prices.saatlik == null || d.prices.gunluk == null)) {
-    return { error: "Yayınlamak için saatlik ve günlük ücret zorunludur." };
+  // Yayınlamak için saatlik ücret zorunlu.
+  if (d.status === "aktif" && d.prices.saatlik == null) {
+    return { error: "Yayınlamak için saatlik ücret zorunludur." };
   }
 
   const [created] = await db

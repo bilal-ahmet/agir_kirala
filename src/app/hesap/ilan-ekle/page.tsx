@@ -233,11 +233,10 @@ export default function IlanEklePage() {
 
   const saveDraft = () => submitListing("taslak");
 
-  // Yayın için zorunlu fiyat alanları (saatlik + günlük)
+  // Yayın için zorunlu fiyat alanı (saatlik)
   const missingPrices = (): string[] => {
     const m: string[] = [];
     if (!parsedPrices.saatlik) m.push("Saatlik Ücret");
-    if (!parsedPrices.gunluk) m.push("Günlük Ücret");
     return m;
   };
 
@@ -511,11 +510,11 @@ export default function IlanEklePage() {
             <div>
               <Label required>Fiyatlandırma (₺)</Label>
               <p className="mb-2 -mt-1 text-xs text-faint">
-                Saatlik ve günlük ücret zorunludur. Aylık/yıllık opsiyoneldir.
+                Saatlik ücret zorunludur. Günlük/haftalık/aylık/yıllık opsiyoneldir.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {LISTING_PERIODS.map((p) => {
-                  const req = p.value === "saatlik" || p.value === "gunluk";
+                  const req = p.value === "saatlik";
                   return (
                     <Field key={p.value} label={p.label} required={req}>
                       <Input
@@ -574,7 +573,7 @@ export default function IlanEklePage() {
             <div>
               <Label>Kart Önizlemesi</Label>
               <div className="max-w-xs">
-                <ListingCard listing={preview} />
+                <ListingCard listing={preview} disableLink />
               </div>
             </div>
           </div>
