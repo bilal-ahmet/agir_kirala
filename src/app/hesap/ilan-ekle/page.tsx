@@ -218,9 +218,10 @@ export default function IlanEklePage() {
         return;
       }
       // İlan oluşturuldu → seçilen görselleri yükle.
-      if (photoFiles.length) {
+      // Görseller tek tek gönderilir: tek bir server action isteği bodySizeLimit'i aşmasın.
+      for (const f of photoFiles) {
         const fd = new FormData();
-        for (const f of photoFiles) fd.append("photos", f);
+        fd.append("photos", f);
         const up = await uploadListingPhotosAction(res.id, fd);
         if (up.error) {
           // İlan kaydedildi ama görsel yüklenemedi — kullanıcıyı bilgilendir, yine de yönlendir.
