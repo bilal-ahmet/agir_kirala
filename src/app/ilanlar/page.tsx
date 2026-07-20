@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { parseFilters, searchListings } from "@/lib/filters";
+import { parseFilters } from "@/lib/filters";
+import { searchListings } from "@/lib/db/queries/listings";
 import { getCategory } from "@/lib/categories";
 import { formatNumber } from "@/lib/format";
 import { ListingGrid } from "@/components/listing/ListingGrid";
@@ -27,7 +28,7 @@ export default async function IlanlarPage({
 }) {
   const params = await searchParams;
   const filters = parseFilters(params);
-  const { results, total, page, totalPages } = searchListings(filters);
+  const { results, total, page, totalPages } = await searchListings(filters);
   const category = getCategory(filters.kategori);
 
   const title = category

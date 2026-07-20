@@ -119,10 +119,21 @@ export interface Listing {
   minRentalDays?: number;
   /** İlan sahibinin belirlediği müsaitlik */
   availability?: Availability;
-  /** Görsel çeşitliliği için tohum (placeholder gradyanı) */
+  /** Görsel çeşitliliği için tohum (placeholder gradyanı — gerçek foto yoksa) */
   photoSeed?: number;
   /** Kaç fotoğraf gösterileceği (placeholder galeri) */
   photoCount?: number;
+  /** Yüklenmiş gerçek görseller (Supabase Storage). Boşsa placeholder kullanılır. */
+  photos?: ListingPhoto[];
+  /** İlan sahibi özeti (kart üzerinde rozet/puan için denormalize). */
+  ownerVerified?: boolean;
+  ownerRating?: number;
+}
+
+/** Yüklenmiş ilan görseli */
+export interface ListingPhoto {
+  id: string;
+  url: string;
 }
 
 export interface RentalRequest {

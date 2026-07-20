@@ -1,13 +1,8 @@
-import Link from "next/link";
 import { SearchBar } from "./SearchBar";
-import { CATEGORIES } from "@/lib/categories";
-import { activeListings } from "@/lib/data/listings";
+import { countActiveListings } from "@/lib/db/queries/listings";
 
-const QUICK = ["ekskavator", "vinc", "forklift", "kamyon", "manlift"];
-
-export function Hero() {
-  const quickCats = QUICK.map((s) => CATEGORIES.find((c) => c.slug === s)!).filter(Boolean);
-  const total = activeListings().length;
+export async function Hero() {
+  const total = await countActiveListings();
 
   return (
     <section className="relative overflow-hidden border-b border-line bg-base">

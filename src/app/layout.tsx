@@ -4,6 +4,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { getCurrentUser } from "@/lib/auth/session";
+import { favoriteIds } from "@/lib/db/queries/favorites";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,11 +40,14 @@ export const metadata: Metadata = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getCurrentUser();
+  const favIds = user ? await favoriteIds(user.id) : [];
+
   return (
     <html
       lang="tr"
@@ -58,7 +63,7 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-full flex-col bg-base text-fg">
-        <Providers>
+        <Providers initialUser={user} initialFavoriteIds={favIds}>
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />

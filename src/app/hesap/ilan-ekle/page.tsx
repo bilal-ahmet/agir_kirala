@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useAuth } from "@/context/auth-context";
-import { addLocalListing } from "@/lib/storage";
+import { createListingAction, type CreateListingInput } from "@/lib/actions/listings";
+import { uploadListingPhotosAction } from "@/lib/actions/photos";
 import { CATEGORIES, getCategory } from "@/lib/categories";
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
@@ -60,6 +61,9 @@ export default function IlanEklePage() {
   const [previewing, setPreviewing] = useState(false);
   const [seed] = useState(() => Math.floor(Math.random() * 999));
   const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const photoPreviews = useMemo(() => photoFiles.map((f) => URL.createObjectURL(f)), [photoFiles]);
 
   const [form, setForm] = useState<FormState>({
     categorySlug: "",
@@ -180,16 +184,54 @@ export default function IlanEklePage() {
 
   const buildListing = (status: ListingStatus): Listing => ({
     ...preview,
-    id: `l-${Date.now()}`,
+    id: "preview",
     status,
     title: form.title || `${form.brand} ${form.model}`.trim(),
     minRentalDays: form.minRentalDays,
   });
 
-  const saveDraft = () => {
-    addLocalListing(buildListing("taslak"));
-    router.push("/hesap/ilanlarim?durum=taslak");
+  const buildInput = (status: "aktif" | "taslak"): CreateListingInput => ({
+    title: form.title || `${form.brand} ${form.model}`.trim(),
+    categorySlug: form.categorySlug,
+    subCategorySlug: form.subCategorySlug,
+    brand: form.brand,
+    model: form.model,
+    year: form.year,
+    city: form.city,
+    district: form.district,
+    prices: parsedPrices,
+    operator: form.operator,
+    fuel: form.fuel,
+    usage: Number(form.usage) || 0,
+    specs: parsedSpecs,
+    description: form.description,
+    minRentalDays: form.minRentalDays,
+    availability: hasAvailability ? form.availability : undefined,
+    status,
+  });
+
+  const submitListing = (status: "aktif" | "taslak") => {
+    startTransition(async () => {
+      const res = await createListingAction(buildInput(status));
+      if (res.error || !res.id) {
+        setError(res.error ?? "İlan oluşturulamadı.");
+        return;
+      }
+      // İlan oluşturuldu → seçilen görselleri yükle.
+      if (photoFiles.length) {
+        const fd = new FormData();
+        for (const f of photoFiles) fd.append("photos", f);
+        const up = await uploadListingPhotosAction(res.id, fd);
+        if (up.error) {
+          // İlan kaydedildi ama görsel yüklenemedi — kullanıcıyı bilgilendir, yine de yönlendir.
+          console.warn(up.error);
+        }
+      }
+      router.push(status === "taslak" ? "/hesap/ilanlarim?durum=taslak" : "/hesap/ilanlarim");
+    });
   };
+
+  const saveDraft = () => submitListing("taslak");
 
   // Yayın için zorunlu fiyat alanları (saatlik + günlük)
   const missingPrices = (): string[] => {
@@ -207,8 +249,7 @@ export default function IlanEklePage() {
       setStep(3);
       return;
     }
-    addLocalListing(buildListing("aktif"));
-    router.push("/hesap/ilanlarim");
+    submitListing("aktif");
   };
 
   // ───────── önizleme ekranı (ilan sayfası gibi) ─────────
@@ -225,10 +266,10 @@ export default function IlanEklePage() {
             <Button variant="ghost" size="sm" onClick={() => setPreviewing(false)}>
               ‹ Düzenlemeye Dön
             </Button>
-            <Button variant="outline" size="sm" onClick={saveDraft}>
+            <Button variant="outline" size="sm" onClick={saveDraft} disabled={pending}>
               Taslak Kaydet
             </Button>
-            <Button size="sm" onClick={publish}>İlanı Yayınla</Button>
+            <Button size="sm" onClick={publish} disabled={pending}>İlanı Yayınla</Button>
           </div>
         </div>
 
@@ -500,6 +541,37 @@ export default function IlanEklePage() {
             </Field>
 
             <div>
+              <Label>Fotoğraflar</Label>
+              <p className="mb-2 -mt-1 text-xs text-faint">
+                JPEG/PNG/WebP, en fazla 8 görsel · her biri 5 MB&apos;a kadar. İsteğe bağlı.
+              </p>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []).slice(0, 8);
+                  setPhotoFiles(files);
+                  setError(null);
+                }}
+                className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-accent-fg hover:file:bg-accent-hover"
+              />
+              {photoPreviews.length > 0 && (
+                <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {photoPreviews.map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={src}
+                      src={src}
+                      alt={`Görsel ${i + 1}`}
+                      className="aspect-square w-full rounded-md object-cover"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
               <Label>Kart Önizlemesi</Label>
               <div className="max-w-xs">
                 <ListingCard listing={preview} />
@@ -523,7 +595,7 @@ export default function IlanEklePage() {
             <Button onClick={next}>Devam Et ›</Button>
           ) : (
             <div className="flex gap-3">
-              <Button variant="outline" onClick={saveDraft}>
+              <Button variant="outline" onClick={saveDraft} disabled={pending}>
                 Taslak Kaydet
               </Button>
               <Button

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/categories";
-import { countByCategory } from "@/lib/filters";
+import { categoryCounts } from "@/lib/db/queries/listings";
 import { HScroller } from "./HScroller";
 
-export function CategoryGrid() {
+export async function CategoryGrid() {
+  const counts = await categoryCounts();
   return (
     <section className="container-page py-14">
       <div className="mb-6 flex items-end justify-between">
@@ -19,7 +20,7 @@ export function CategoryGrid() {
       {/* Yana kaydırılabilir kategori şeridi — sadece kategori isimleri */}
       <HScroller>
         {CATEGORIES.map((c) => {
-          const count = countByCategory(c.slug);
+          const count = counts[c.slug] ?? 0;
           return (
             <Link
               key={c.slug}

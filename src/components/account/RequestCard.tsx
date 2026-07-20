@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import type { RentalRequest, RequestStatus } from "@/lib/types";
-import { findAnyListing } from "@/lib/storage";
-import { getUser } from "@/lib/data/users";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import type { Listing, RentalRequest, RequestStatus } from "@/lib/types";
+import { updateRequestStatusAction } from "@/lib/actions/requests";
 import { getCategory } from "@/lib/categories";
 import { PERIOD_LABELS } from "@/lib/constants";
 import { formatDate, formatPrice } from "@/lib/format";
 import { ListingImage } from "@/components/listing/ListingImage";
+import { ReviewForm } from "@/components/account/ReviewForm";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
@@ -21,15 +23,25 @@ const STATUS: Record<RequestStatus, { label: string; tone: BadgeTone }> = {
 interface RequestCardProps {
   request: RentalRequest;
   role: "incoming" | "outgoing";
-  onApprove?: () => void;
-  onReject?: () => void;
+  listing: Listing | null;
+  counterpartName: string;
 }
 
-export function RequestCard({ request, role, onApprove, onReject }: RequestCardProps) {
-  const listing = findAnyListing(request.listingId);
+export function RequestCard({ request, role, listing, counterpartName }: RequestCardProps) {
   const category = listing ? getCategory(listing.categorySlug) : undefined;
-  const counterpart = getUser(role === "incoming" ? request.renterId : request.ownerId);
   const status = STATUS[request.status];
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const setStatus = (next: RequestStatus) => {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateRequestStatusAction(request.id, next);
+      if (res.error) setError(res.error);
+      else router.refresh();
+    });
+  };
 
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
@@ -52,7 +64,7 @@ export function RequestCard({ request, role, onApprove, onReject }: RequestCardP
           </div>
           <p className="mt-1 text-sm text-muted">
             {role === "incoming" ? "Talep eden: " : "İlan sahibi: "}
-            <span className="text-fg">{counterpart?.name ?? "Kullanıcı"}</span>
+            <span className="text-fg">{counterpartName}</span>
           </p>
           <p className="mt-0.5 text-sm text-muted">
             {formatDate(request.startDate)} – {formatDate(request.endDate)} · {PERIOD_LABELS[request.period]}
@@ -67,11 +79,30 @@ export function RequestCard({ request, role, onApprove, onReject }: RequestCardP
         </p>
       )}
 
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+
       {role === "incoming" && request.status === "beklemede" && (
         <div className="mt-3 flex gap-2">
-          <Button size="sm" onClick={onApprove}>Onayla</Button>
-          <Button size="sm" variant="outline" onClick={onReject}>Reddet</Button>
+          <Button size="sm" disabled={pending} onClick={() => setStatus("onaylandi")}>
+            Onayla
+          </Button>
+          <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("reddedildi")}>
+            Reddet
+          </Button>
         </div>
+      )}
+
+      {role === "outgoing" && request.status === "beklemede" && (
+        <div className="mt-3">
+          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setStatus("iptal")}>
+            Talebi İptal Et
+          </Button>
+        </div>
+      )}
+
+      {/* Onaylanmış kiralama sonrası ilan sahibini değerlendir */}
+      {role === "outgoing" && request.status === "onaylandi" && (
+        <ReviewForm rentalRequestId={request.id} />
       )}
     </div>
   );

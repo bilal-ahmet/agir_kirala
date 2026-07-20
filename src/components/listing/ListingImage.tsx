@@ -16,6 +16,8 @@ interface ListingImageProps {
   icon: string;
   label?: string;
   seed?: number;
+  /** Gerçek yüklenmiş görsel URL'si (varsa placeholder yerine gösterilir). */
+  photoUrl?: string;
   className?: string;
   iconSize?: string;
   rounded?: string;
@@ -25,6 +27,7 @@ export function ListingImage({
   icon,
   label,
   seed = 0,
+  photoUrl,
   className,
   iconSize = "text-6xl",
   rounded = "rounded-t-lg",
@@ -36,10 +39,18 @@ export function ListingImage({
       className={cn("relative flex items-center justify-center overflow-hidden", rounded, className)}
       style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
     >
-      <div className="bg-grid absolute inset-0 opacity-60" />
-      <span className={cn("relative opacity-80 drop-shadow", iconSize)} aria-hidden>
-        {icon}
-      </span>
+      {photoUrl ? (
+        // Supabase public URL — next/image remotePatterns gerektirmemek için düz img.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt={label ?? ""} className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <>
+          <div className="bg-grid absolute inset-0 opacity-60" />
+          <span className={cn("relative opacity-80 drop-shadow", iconSize)} aria-hidden>
+            {icon}
+          </span>
+        </>
+      )}
       {label && (
         <span className="absolute bottom-2 left-2 rounded bg-black/40 px-2 py-0.5 text-[11px] font-medium text-white/80 backdrop-blur">
           {label}

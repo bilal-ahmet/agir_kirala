@@ -1,21 +1,14 @@
-"use client";
-
 import Link from "next/link";
-import { useMemo } from "react";
-import { useFavorites } from "@/context/favorites-context";
-import { findAnyListing } from "@/lib/storage";
-import type { Listing } from "@/lib/types";
+import { verifySession } from "@/lib/auth/session";
+import { favoriteListings } from "@/lib/db/queries/favorites";
 import { ListingGrid } from "@/components/listing/ListingGrid";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { buttonClasses } from "@/components/ui/Button";
 import { HeartIcon } from "@/components/ui/icons";
 
-export default function FavorilerimPage() {
-  const { ids } = useFavorites();
-  const listings = useMemo(
-    () => ids.map((id) => findAnyListing(id)).filter((l): l is Listing => Boolean(l)),
-    [ids],
-  );
+export default async function FavorilerimPage() {
+  const user = await verifySession();
+  const listings = await favoriteListings(user.id);
 
   return (
     <div className="space-y-5">

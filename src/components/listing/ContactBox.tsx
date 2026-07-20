@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { User } from "@/lib/types";
 import { useAuth } from "@/context/auth-context";
-import { startConversation } from "@/lib/storage";
+import { startConversationAction } from "@/lib/actions/conversations";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Field";
 import { MessageIcon, PhoneIcon } from "@/components/ui/icons";
@@ -22,6 +22,7 @@ export function ContactBox({ owner, listingId }: { owner: User; listingId: strin
   const [revealed, setRevealed] = useState(false);
   const [composing, setComposing] = useState(false);
   const [text, setText] = useState("");
+  const [pending, startTransition] = useTransition();
 
   if (user?.id === owner.id) return null;
 
@@ -31,8 +32,11 @@ export function ContactBox({ owner, listingId }: { owner: User; listingId: strin
       return;
     }
     if (!text.trim()) return;
-    const id = startConversation(listingId, user.id, owner.id, text.trim());
-    router.push(`/hesap/mesajlar?c=${id}`);
+    const message = text.trim();
+    startTransition(async () => {
+      const res = await startConversationAction(listingId, message);
+      if (res.conversationId) router.push(`/hesap/mesajlar?c=${res.conversationId}`);
+    });
   };
 
   return (
@@ -72,7 +76,7 @@ export function ContactBox({ owner, listingId }: { owner: User; listingId: strin
             placeholder={`${owner.name} firmasına mesajınız...`}
             rows={3}
           />
-          <Button className="w-full" size="sm" onClick={send} disabled={!text.trim()}>
+          <Button className="w-full" size="sm" onClick={send} disabled={pending || !text.trim()}>
             Mesajı Gönder
           </Button>
         </div>

@@ -11,18 +11,26 @@ interface GalleryProps {
   baseSeed: number;
   count: number;
   label?: string;
+  /** Gerçek yüklenmiş görseller (varsa placeholder yerine kullanılır). */
+  photos?: { url: string }[];
 }
 
-export function Gallery({ id, icon, baseSeed, count, label }: GalleryProps) {
-  const seeds = Array.from({ length: Math.max(count, 1) }, (_, i) => baseSeed + i);
+export function Gallery({ id, icon, baseSeed, count, label, photos }: GalleryProps) {
+  // Gerçek foto varsa onları, yoksa placeholder tohumlarını kullan.
+  const items: { seed: number; url?: string }[] =
+    photos && photos.length
+      ? photos.map((p, i) => ({ seed: baseSeed + i, url: p.url }))
+      : Array.from({ length: Math.max(count, 1) }, (_, i) => ({ seed: baseSeed + i }));
   const [active, setActive] = useState(0);
+  const current = items[active] ?? items[0];
 
   return (
     <div>
       <div className="relative">
         <ListingImage
           icon={icon}
-          seed={seeds[active]}
+          seed={current.seed}
+          photoUrl={current.url}
           label={label}
           className="aspect-[16/10] w-full"
           iconSize="text-8xl"
@@ -31,9 +39,9 @@ export function Gallery({ id, icon, baseSeed, count, label }: GalleryProps) {
         <FavoriteButton id={id} className="absolute right-3 top-3" size={20} />
       </div>
 
-      {seeds.length > 1 && (
+      {items.length > 1 && (
         <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
-          {seeds.map((seed, i) => (
+          {items.map((item, i) => (
             <button
               key={i}
               onClick={() => setActive(i)}
@@ -43,7 +51,7 @@ export function Gallery({ id, icon, baseSeed, count, label }: GalleryProps) {
               )}
               aria-label={`Fotoğraf ${i + 1}`}
             >
-              <ListingImage icon={icon} seed={seed} className="h-16 w-24" iconSize="text-2xl" rounded="rounded-md" />
+              <ListingImage icon={icon} seed={item.seed} photoUrl={item.url} className="h-16 w-24" iconSize="text-2xl" rounded="rounded-md" />
             </button>
           ))}
         </div>

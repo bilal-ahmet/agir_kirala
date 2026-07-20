@@ -1,9 +1,7 @@
 import type { Listing } from "@/lib/types";
-import { similarListings } from "@/lib/filters";
 import { ListingGrid } from "./ListingGrid";
 
-export function SimilarListings({ listing }: { listing: Listing }) {
-  const items = similarListings(listing, 3);
+export function SimilarListings({ items }: { items: Listing[] }) {
   if (items.length === 0) return null;
 
   return (

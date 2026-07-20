@@ -1,34 +1,26 @@
-"use client";
-
 import Link from "next/link";
-import { useAuth } from "@/context/auth-context";
-import { useFavorites } from "@/context/favorites-context";
-import { useStored } from "@/components/account/useStored";
-import {
-  incomingRequests,
-  myListings,
-  outgoingRequests,
-  setRequestStatus,
-} from "@/lib/storage";
+import { verifySession } from "@/lib/auth/session";
+import { myListings } from "@/lib/db/queries/listings";
+import { incomingRequests, outgoingRequests } from "@/lib/db/queries/requests";
+import { favoriteIds } from "@/lib/db/queries/favorites";
 import { StatCard } from "@/components/account/StatCard";
 import { RequestCard } from "@/components/account/RequestCard";
 import { buttonClasses } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ClockIcon, HeartIcon, InboxIcon, ListIcon, PlusIcon } from "@/components/ui/icons";
 
-export default function OverviewPage() {
-  const { user } = useAuth();
-  const { count: favCount } = useFavorites();
-  const userId = user?.id ?? "";
+export default async function OverviewPage() {
+  const user = await verifySession();
 
-  const listings = useStored(() => (userId ? myListings(userId) : []));
-  const incoming = useStored(() => (userId ? incomingRequests(userId) : []));
-  const outgoing = useStored(() => (userId ? outgoingRequests(userId) : []));
-
-  if (!user) return null;
+  const [listings, incoming, outgoing, favIds] = await Promise.all([
+    myListings(user.id),
+    incomingRequests(user.id),
+    outgoingRequests(user.id),
+    favoriteIds(user.id),
+  ]);
 
   const activeCount = listings.filter((l) => l.status === "aktif").length;
-  const pending = incoming.filter((r) => r.status === "beklemede");
+  const pending = incoming.filter((v) => v.request.status === "beklemede");
 
   return (
     <div className="space-y-6">
@@ -41,7 +33,7 @@ export default function OverviewPage() {
         <StatCard label="Aktif İlan" value={activeCount} icon={<ListIcon />} href="/hesap/ilanlarim" />
         <StatCard label="Bekleyen Talep" value={pending.length} icon={<InboxIcon />} href="/hesap/gelen-talepler" accent={pending.length > 0} />
         <StatCard label="Gönderdiğim Talep" value={outgoing.length} icon={<ClockIcon />} href="/hesap/taleplerim" />
-        <StatCard label="Favorilerim" value={favCount} icon={<HeartIcon />} href="/hesap/favorilerim" />
+        <StatCard label="Favorilerim" value={favIds.length} icon={<HeartIcon />} href="/hesap/favorilerim" />
       </div>
 
       <section>
@@ -56,13 +48,13 @@ export default function OverviewPage() {
 
         {pending.length > 0 ? (
           <div className="space-y-3">
-            {pending.slice(0, 3).map((r) => (
+            {pending.slice(0, 3).map((v) => (
               <RequestCard
-                key={r.id}
-                request={r}
+                key={v.request.id}
+                request={v.request}
                 role="incoming"
-                onApprove={() => setRequestStatus(r.id, "onaylandi")}
-                onReject={() => setRequestStatus(r.id, "reddedildi")}
+                listing={v.listing}
+                counterpartName={v.counterpartName}
               />
             ))}
           </div>

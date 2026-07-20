@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { Listing, RentalPeriod } from "@/lib/types";
 import { useAuth } from "@/context/auth-context";
-import { addLocalRequest } from "@/lib/storage";
+import { createRentalRequestAction } from "@/lib/actions/requests";
 import { PERIODS } from "@/lib/constants";
 import { daysBetween, formatPrice, primaryPrice } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
@@ -48,6 +48,7 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [pending, startTransition] = useTransition();
 
   const isOwn = user?.id === listing.ownerId;
 
@@ -84,26 +85,20 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
     }
     if (!calc) return setError("Tutar hesaplanamadı.");
 
-    const timeNote =
-      startTime || endTime
-        ? `Saat: ${startTime || "—"}${endTime ? `–${endTime}` : ""}`
-        : "";
-    const fullMessage = [message.trim(), timeNote].filter(Boolean).join("\n");
-
-    addLocalRequest({
-      id: `r-${Date.now()}`,
-      listingId: listing.id,
-      renterId: user.id,
-      ownerId: listing.ownerId,
-      startDate: start,
-      endDate: end,
-      period,
-      message: fullMessage,
-      status: "beklemede",
-      createdAt: new Date().toISOString(),
-      totalPrice: calc.total,
+    startTransition(async () => {
+      // Tutar ve tam mesaj (saat notu dahil) server'da yeniden oluşturulur.
+      const res = await createRentalRequestAction({
+        listingId: listing.id,
+        startDate: start,
+        endDate: end,
+        period,
+        message,
+        startTime,
+        endTime,
+      });
+      if (res.error) setError(res.error);
+      else setDone(true);
     });
-    setDone(true);
   };
 
   if (done) {
@@ -205,7 +200,7 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <Button type="submit" className="w-full" size="lg">
+      <Button type="submit" className="w-full" size="lg" disabled={pending}>
         {user ? "Kiralama Talebi Gönder" : "Giriş Yap ve Talep Gönder"}
       </Button>
       <p className="text-center text-xs text-faint">

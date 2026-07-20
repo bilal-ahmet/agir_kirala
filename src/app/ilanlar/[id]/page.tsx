@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { getListing } from "@/lib/data/listings";
-import { getUser } from "@/lib/data/users";
+import { notFound } from "next/navigation";
+import { getListingById, similarListings } from "@/lib/db/queries/listings";
+import { getUser } from "@/lib/db/queries/users";
+import { reviewsForUser } from "@/lib/db/queries/reviews";
 import { ListingDetail } from "@/components/listing/ListingDetail";
-import { LocalListingDetailLoader } from "@/components/listing/LocalListingDetailLoader";
 
 export async function generateMetadata({
   params,
@@ -10,7 +11,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const listing = getListing(id);
+  const listing = await getListingById(id);
   if (!listing) return { title: "İlan" };
   return {
     title: listing.title,
@@ -24,11 +25,13 @@ export default async function ListingDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const listing = getListing(id);
+  const listing = await getListingById(id);
+  if (!listing) notFound();
 
-  // Tohum veride yoksa kullanıcının yerel oluşturduğu ilan olabilir → client yükleyici
-  if (!listing) return <LocalListingDetailLoader id={id} />;
-
-  const owner = getUser(listing.ownerId);
-  return <ListingDetail listing={listing} owner={owner} />;
+  const [owner, similar, reviews] = await Promise.all([
+    getUser(listing.ownerId),
+    similarListings(listing, 3),
+    reviewsForUser(listing.ownerId),
+  ]);
+  return <ListingDetail listing={listing} owner={owner} similar={similar} reviews={reviews} />;
 }

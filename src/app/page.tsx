@@ -3,7 +3,7 @@ import { CategoryGrid } from "@/components/home/CategoryGrid";
 import { ExploreSection } from "@/components/home/ExploreSection";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { ListingGrid } from "@/components/listing/ListingGrid";
-import { activeListings } from "@/lib/data/listings";
+import { activeListings, countActiveListings } from "@/lib/db/queries/listings";
 import { ShieldCheckIcon, TruckIcon, ClockIcon, UserIcon } from "@/components/ui/icons";
 
 const HOME_GRID_SIZE = 9;
@@ -15,8 +15,8 @@ const TRUST = [
   { icon: <ClockIcon />, title: "Esnek Süre", text: "Saatlik, günlük, haftalık ve aylık kiralama." },
 ];
 
-export default function HomePage() {
-  const all = activeListings();
+export default async function HomePage() {
+  const [all, total] = await Promise.all([activeListings(), countActiveListings()]);
   const featured = all.filter((l) => l.featured);
   // Her zaman dolu grid: öne çıkanlar yetmezse kalan aktif ilanlarla tamamla.
   const gridItems = (
@@ -46,7 +46,7 @@ export default function HomePage() {
 
       <CategoryGrid />
       <ExploreSection
-        initialTotal={all.length}
+        initialTotal={total}
         resultsSlot={<ListingGrid listings={gridItems} />}
       />
       <HowItWorks />

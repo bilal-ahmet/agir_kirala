@@ -1,18 +1,13 @@
-"use client";
-
-import { useAuth } from "@/context/auth-context";
-import { useStored } from "@/components/account/useStored";
-import { incomingRequests, setRequestStatus } from "@/lib/storage";
+import { verifySession } from "@/lib/auth/session";
+import { incomingRequests } from "@/lib/db/queries/requests";
 import { RequestCard } from "@/components/account/RequestCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InboxIcon } from "@/components/ui/icons";
 
-export default function GelenTaleplerPage() {
-  const { user } = useAuth();
-  const incoming = useStored(() => (user ? incomingRequests(user.id) : []));
-  if (!user) return null;
-
-  const pending = incoming.filter((r) => r.status === "beklemede");
+export default async function GelenTaleplerPage() {
+  const user = await verifySession();
+  const incoming = await incomingRequests(user.id);
+  const pending = incoming.filter((v) => v.request.status === "beklemede");
 
   return (
     <div className="space-y-5">
@@ -31,13 +26,13 @@ export default function GelenTaleplerPage() {
         />
       ) : (
         <div className="space-y-3">
-          {incoming.map((r) => (
+          {incoming.map((v) => (
             <RequestCard
-              key={r.id}
-              request={r}
+              key={v.request.id}
+              request={v.request}
               role="incoming"
-              onApprove={() => setRequestStatus(r.id, "onaylandi")}
-              onReject={() => setRequestStatus(r.id, "reddedildi")}
+              listing={v.listing}
+              counterpartName={v.counterpartName}
             />
           ))}
         </div>

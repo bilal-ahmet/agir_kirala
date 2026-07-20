@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/context/auth-context";
+import { useSearchParams } from "next/navigation";
+import { useActionState, useState } from "react";
+import { registerAction, type AuthState } from "@/lib/auth/actions";
 import type { OwnerType } from "@/lib/types";
 import { PROVINCE_NAMES } from "@/lib/locations";
 import { Button } from "@/components/ui/Button";
@@ -11,31 +11,10 @@ import { Field, Input, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
 export function RegisterForm() {
-  const { register, user, ready } = useAuth();
-  const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get("next") || "/hesap";
-
   const [type, setType] = useState<OwnerType>("bireysel");
-  const [name, setName] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [city, setCity] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (ready && user) router.replace(next);
-  }, [ready, user, next, router]);
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !email.trim() || !phone.trim() || !city) {
-      return setError("Lütfen zorunlu alanları doldurun.");
-    }
-    register({ name, email, phone, city, type, companyName });
-    router.replace(next);
-  };
+  const [state, formAction, pending] = useActionState<AuthState, FormData>(registerAction, {});
 
   return (
     <div className="w-full max-w-md">
@@ -61,27 +40,34 @@ export function RegisterForm() {
         ))}
       </div>
 
-      <form onSubmit={submit} className="space-y-3">
+      <form action={formAction} className="space-y-3">
+        <input type="hidden" name="next" value={next} />
+        <input type="hidden" name="type" value={type} />
+
         <Field label={type === "kurumsal" ? "Yetkili Ad Soyad" : "Ad Soyad"}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad Soyad" />
+          <Input name="name" placeholder="Ad Soyad" required />
         </Field>
 
         {type === "kurumsal" && (
           <Field label="Firma Adı">
-            <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Firma Ünvanı" />
+            <Input name="companyName" placeholder="Firma Ünvanı" required />
           </Field>
         )}
 
         <Field label="E-posta">
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ornek@eposta.com" />
+          <Input type="email" name="email" placeholder="ornek@eposta.com" required />
+        </Field>
+
+        <Field label="Şifre" hint="En az 6 karakter.">
+          <Input type="password" name="password" placeholder="••••••••" autoComplete="new-password" required />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Telefon">
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XX XXX XX XX" />
+            <Input name="phone" placeholder="05XX XXX XX XX" required />
           </Field>
           <Field label="Şehir">
-            <Select value={city} onChange={(e) => setCity(e.target.value)}>
+            <Select name="city" defaultValue="">
               <option value="">Seçin</option>
               {PROVINCE_NAMES.map((p) => (
                 <option key={p} value={p}>{p}</option>
@@ -90,8 +76,10 @@ export function RegisterForm() {
           </Field>
         </div>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <Button type="submit" className="w-full" size="lg">Hesap Oluştur</Button>
+        {state.error && <p className="text-sm text-danger">{state.error}</p>}
+        <Button type="submit" className="w-full" size="lg" disabled={pending}>
+          Hesap Oluştur
+        </Button>
         <p className="text-center text-xs text-faint">
           Kayıt olarak Kullanım Şartları ve Gizlilik Politikası&apos;nı kabul etmiş olursunuz.
         </p>

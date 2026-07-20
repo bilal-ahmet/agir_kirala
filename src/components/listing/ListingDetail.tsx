@@ -19,6 +19,7 @@ import {
   GaugeIcon,
   MapPinIcon,
   ShieldCheckIcon,
+  StarIcon,
   TruckIcon,
 } from "@/components/ui/icons";
 
@@ -29,7 +30,25 @@ const SAFETY_TIPS = [
   "Sigorta ve hasar sorumluluğunu kiralama öncesi belirleyin.",
 ];
 
-export function ListingDetail({ listing, owner }: { listing: Listing; owner?: User }) {
+export interface ListingReview {
+  id: string;
+  reviewerName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
+export function ListingDetail({
+  listing,
+  owner,
+  similar = [],
+  reviews = [],
+}: {
+  listing: Listing;
+  owner?: User;
+  similar?: Listing[];
+  reviews?: ListingReview[];
+}) {
   const category = getCategory(listing.categorySlug);
   const price = primaryPrice(listing.prices);
   const periodShort = price ? PERIODS.find((p) => p.value === price.period)?.short : "";
@@ -59,6 +78,7 @@ export function ListingDetail({ listing, owner }: { listing: Listing; owner?: Us
             baseSeed={listing.photoSeed ?? 0}
             count={listing.photoCount ?? 1}
             label={`${listing.brand} ${listing.model}`}
+            photos={listing.photos}
           />
 
           <div className="mt-6">
@@ -108,6 +128,27 @@ export function ListingDetail({ listing, owner }: { listing: Listing; owner?: Us
           <Section title="Müsaitlik Takvimi">
             <AvailabilityCalendar listingId={listing.id} availability={listing.availability} />
           </Section>
+
+          {reviews.length > 0 && (
+            <Section title={`Değerlendirmeler (${reviews.length})`}>
+              <ul className="space-y-4">
+                {reviews.map((r) => (
+                  <li key={r.id} className="border-b border-line pb-4 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-fg">{r.reviewerName}</span>
+                      <span className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <StarIcon key={n} size={14} filled={n <= r.rating} className={n <= r.rating ? "text-accent" : "text-faint"} />
+                        ))}
+                      </span>
+                    </div>
+                    {r.comment && <p className="mt-1 text-sm text-muted">{r.comment}</p>}
+                    <p className="mt-1 text-xs text-faint">{timeAgo(r.createdAt)}</p>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
           <Section title="Güvenli Kiralama">
             <ul className="space-y-2">
@@ -170,7 +211,7 @@ export function ListingDetail({ listing, owner }: { listing: Listing; owner?: Us
       </div>
       </RentalSelectionProvider>
 
-      <SimilarListings listing={listing} />
+      <SimilarListings items={similar} />
     </div>
   );
 }

@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/context/auth-context";
 import { useFavorites } from "@/context/favorites-context";
-import { useStored } from "./useStored";
-import { conversationsFor, incomingRequests } from "@/lib/storage";
 import {
   ClockIcon,
   HeartIcon,
@@ -17,22 +14,22 @@ import {
 } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
-export function DashboardSidebar() {
-  const { user } = useAuth();
+export function DashboardSidebar({
+  pendingIncoming = 0,
+  conversationCount = 0,
+}: {
+  pendingIncoming?: number;
+  conversationCount?: number;
+}) {
   const { count: favCount } = useFavorites();
   const pathname = usePathname();
-  const userId = user?.id ?? "";
-
-  const incoming = useStored(() => (userId ? incomingRequests(userId) : []));
-  const convos = useStored(() => (userId ? conversationsFor(userId) : []));
-  const pendingIncoming = incoming.filter((r) => r.status === "beklemede").length;
 
   const items = [
     { href: "/hesap", label: "Genel Bakış", icon: <UserIcon size={18} />, exact: true },
     { href: "/hesap/ilanlarim", label: "İlanlarım", icon: <ListIcon size={18} /> },
     { href: "/hesap/gelen-talepler", label: "Gelen Talepler", icon: <InboxIcon size={18} />, badge: pendingIncoming },
     { href: "/hesap/taleplerim", label: "Taleplerim", icon: <ClockIcon size={18} /> },
-    { href: "/hesap/mesajlar", label: "Mesajlar", icon: <MessageIcon size={18} />, badge: convos.length },
+    { href: "/hesap/mesajlar", label: "Mesajlar", icon: <MessageIcon size={18} />, badge: conversationCount },
     { href: "/hesap/favorilerim", label: "Favorilerim", icon: <HeartIcon size={18} />, badge: favCount },
     { href: "/hesap/profil", label: "Profil", icon: <UserIcon size={18} /> },
   ];

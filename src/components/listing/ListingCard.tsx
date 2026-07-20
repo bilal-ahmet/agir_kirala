@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
 import { getCategory } from "@/lib/categories";
-import { getUser } from "@/lib/data/users";
 import { PERIODS } from "@/lib/constants";
 import { formatPrice, formatUsage, primaryPrice } from "@/lib/format";
 import { ListingImage } from "./ListingImage";
@@ -12,7 +11,6 @@ import { cn } from "@/lib/cn";
 
 export function ListingCard({ listing, className }: { listing: Listing; className?: string }) {
   const category = getCategory(listing.categorySlug);
-  const owner = getUser(listing.ownerId);
   const price = primaryPrice(listing.prices);
   const periodShort = price ? PERIODS.find((p) => p.value === price.period)?.short : "";
 
@@ -28,6 +26,7 @@ export function ListingCard({ listing, className }: { listing: Listing; classNam
         <ListingImage
           icon={category?.icon ?? "🛠️"}
           seed={listing.photoSeed}
+          photoUrl={listing.photos?.[0]?.url}
           className="aspect-[4/3] w-full"
         />
         <div className="absolute left-2.5 top-2.5 flex flex-col items-start gap-1.5">
@@ -71,11 +70,11 @@ export function ListingCard({ listing, className }: { listing: Listing; classNam
               <p className="text-sm text-faint">Fiyat için iletişime geçin</p>
             )}
           </div>
-          {owner && (
+          {listing.ownerRating != null && (
             <div className="flex items-center gap-1 text-xs text-muted">
-              {owner.verified && <ShieldCheckIcon size={14} className="text-success" />}
+              {listing.ownerVerified && <ShieldCheckIcon size={14} className="text-success" />}
               <StarIcon size={13} filled className="text-accent" />
-              {owner.rating.toFixed(1)}
+              {listing.ownerRating.toFixed(1)}
             </div>
           )}
         </div>
