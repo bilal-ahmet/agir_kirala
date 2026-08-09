@@ -1,6 +1,7 @@
 import type {
   FuelType,
   ListingCondition,
+  OperatorFilter,
   OwnerType,
   RentalPeriod,
   SortKey,
@@ -64,6 +65,11 @@ export const NAKLIYE_LABELS: Record<TransportFilter, string> = {
 /** "var" seçiminin karşılık geldiği transport değerleri. */
 export const TRANSPORT_VAR_VALUES: TransportOption[] = ["dahil", "ekstra"];
 
+export const OPERATOR_LABELS: Record<OperatorFilter, string> = {
+  operatorlu: "Operatörlü",
+  operatorsuz: "Operatörsüz",
+};
+
 export const CONDITION_LABELS: Record<ListingCondition, string> = {
   sifir: "Sıfır",
   ikinci_el: "2. El",
@@ -73,6 +79,7 @@ export const FUEL_TYPES: FuelType[] = ["dizel", "benzin", "elektrik", "lpg", "hi
 export const OWNER_TYPES: OwnerType[] = ["bireysel", "kurumsal"];
 export const CONDITIONS: ListingCondition[] = ["sifir", "ikinci_el"];
 export const TRANSPORT_FILTERS: TransportFilter[] = ["var", "yok"];
+export const OPERATOR_FILTERS: OperatorFilter[] = ["operatorlu", "operatorsuz"];
 
 export const OWNER_TYPE_LABELS: Record<OwnerType, string> = {
   bireysel: "Bireysel",

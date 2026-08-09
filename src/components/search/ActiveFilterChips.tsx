@@ -6,12 +6,14 @@ import {
   CONDITION_LABELS,
   FUEL_LABELS,
   NAKLIYE_LABELS,
+  OPERATOR_LABELS,
   OWNER_TYPE_LABELS,
   PERIOD_LABELS,
 } from "@/lib/constants";
 import type {
   FuelType,
   ListingCondition,
+  OperatorFilter,
   OwnerType,
   RentalPeriod,
   TransportFilter,
@@ -72,9 +74,7 @@ export function ActiveFilterChips() {
     chips.push({ label: `Yıl: ${minY || "…"}–${maxY || "…"}`, onRemove: () => update((p) => { p.delete("minYil"); p.delete("maxYil"); }) });
   }
 
-  const op = sp.get("operator");
-  if (op) chips.push({ label: op === "operatorlu" ? "Operatörlü" : "Operatörsüz", onRemove: () => setParam("operator", "") });
-
+  listChips("operator", (v) => OPERATOR_LABELS[v as OperatorFilter] ?? v);
   listChips("durum", (v) => CONDITION_LABELS[v as ListingCondition] ?? v);
   listChips("nakliye", (v) => NAKLIYE_LABELS[v as TransportFilter] ?? v);
   listChips("yakit", (v) => FUEL_LABELS[v as FuelType] ?? v);
