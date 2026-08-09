@@ -245,8 +245,8 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
       {/* Model yılı */}
       <Section title="Model Yılı" collapsible={collapsibleAdvanced}>
         <div className="grid grid-cols-2 gap-2">
-          <NumberInput keyName="minYil" placeholder={`En eski (${MIN_YEAR})`} maxLength={4} />
-          <NumberInput keyName="maxYil" placeholder={`En yeni (${MAX_YEAR})`} maxLength={4} />
+          <NumberInput keyName="minYil" placeholder={`Min (${MIN_YEAR})`} maxLength={4} />
+          <NumberInput keyName="maxYil" placeholder={`Max (${MAX_YEAR})`} maxLength={4} />
         </div>
       </Section>
 
