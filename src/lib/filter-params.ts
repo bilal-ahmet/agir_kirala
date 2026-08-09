@@ -9,6 +9,7 @@ import type {
   FilterState,
   FuelType,
   ListingCondition,
+  OperatorFilter,
   OwnerType,
   RentalPeriod,
   SortKey,
@@ -54,6 +55,7 @@ const FUELS = ["dizel", "benzin", "elektrik", "lpg", "hibrit"] as const;
 const OWNER_TYPES = ["bireysel", "kurumsal"] as const;
 const CONDITIONS = ["sifir", "ikinci_el"] as const;
 const TRANSPORTS = ["var", "yok"] as const;
+const OPERATORS = ["operatorlu", "operatorsuz"] as const;
 
 /** searchParams nesnesini FilterState'e çevirir. */
 export function parseFilters(params: RawParams): FilterState {
@@ -81,7 +83,7 @@ export function parseFilters(params: RawParams): FilterState {
     maxFiyat: nonNegative(params.maxFiyat),
     minYil: nonNegative(params.minYil),
     maxYil: nonNegative(params.maxYil),
-    operator: str(params.operator) as FilterState["operator"],
+    operator: list<OperatorFilter>(params.operator, OPERATORS),
     nakliye: list<TransportFilter>(params.nakliye, TRANSPORTS),
     saticiTipi: list<OwnerType>(params.saticiTipi, OWNER_TYPES),
     yakit: list<FuelType>(params.yakit, FUELS),
@@ -104,7 +106,7 @@ export function activeFilterCount(f: FilterState): number {
   if (f.periyot) n++;
   if (f.minFiyat != null || f.maxFiyat != null) n++;
   if (f.minYil != null || f.maxYil != null) n++;
-  if (f.operator) n++;
+  if (f.operator?.length) n += f.operator.length;
   if (f.nakliye?.length) n += f.nakliye.length;
   if (f.saticiTipi?.length) n += f.saticiTipi.length;
   if (f.yakit?.length) n += f.yakit.length;

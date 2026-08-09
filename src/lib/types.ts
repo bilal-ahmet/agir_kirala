@@ -22,6 +22,9 @@ export type ContactPreference = "telefon_mesaj" | "sadece_mesaj";
 /** Filtrede nakliye seçimi (transport değerlerinin kullanıcıya görünen sadeleştirmesi) */
 export type TransportFilter = "var" | "yok";
 
+/** Filtrede operatör seçimi */
+export type OperatorFilter = "operatorlu" | "operatorsuz";
+
 /** İlan durumu */
 export type ListingStatus = "aktif" | "pasif" | "taslak";
 
@@ -197,7 +200,7 @@ export interface FilterState {
   maxFiyat?: number;
   minYil?: number;
   maxYil?: number;
-  operator?: "operatorlu" | "operatorsuz";
+  operator?: OperatorFilter[];
   nakliye?: TransportFilter[];
   saticiTipi?: OwnerType[];
   yakit?: FuelType[];

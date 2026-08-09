@@ -13,6 +13,8 @@ import {
   MAX_YEAR,
   MIN_YEAR,
   NAKLIYE_LABELS,
+  OPERATOR_FILTERS,
+  OPERATOR_LABELS,
   OWNER_TYPES,
   OWNER_TYPE_LABELS,
   PERIODS,
@@ -156,14 +158,14 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
 
       {/* Operatör */}
       <Section title="Operatör">
-        <Segmented
-          value={sp.get("operator") || ""}
-          onChange={(v) => setParam("operator", v === (sp.get("operator") || "") ? "" : v)}
-          options={[
-            { value: "operatorlu", label: "Operatörlü" },
-            { value: "operatorsuz", label: "Operatörsüz" },
-          ]}
-        />
+        {OPERATOR_FILTERS.map((o) => (
+          <CheckRow
+            key={o}
+            label={OPERATOR_LABELS[o]}
+            checked={has("operator", o)}
+            onChange={() => toggleInList("operator", o)}
+          />
+        ))}
       </Section>
 
       {/* Marka — seçilen alt kategoriye göre */}

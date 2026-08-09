@@ -70,8 +70,10 @@ function buildConditions(f: FilterState): SQL[] {
   if (f.minYil != null) c.push(gte(listings.year, f.minYil));
   if (f.maxYil != null) c.push(lte(listings.year, f.maxYil));
 
-  if (f.operator === "operatorlu") c.push(eq(listings.operator, true));
-  if (f.operator === "operatorsuz") c.push(eq(listings.operator, false));
+  // Operatör: her ikisi de seçiliyse (ya da hiçbiri) koşul eklenmez.
+  if (f.operator?.length === 1) {
+    c.push(eq(listings.operator, f.operator[0] === "operatorlu"));
+  }
 
   // Nakliye: "var" → dahil|ekstra, "yok" → yok. İkisi de seçiliyse koşul yok.
   if (f.nakliye?.length) {
@@ -174,8 +176,14 @@ export interface SearchResult {
   totalPages: number;
 }
 
-/** Aktif ilanları filtreler, sıralar ve sayfalar. filters.ts searchListings karşılığı. */
-export async function searchListings(f: FilterState): Promise<SearchResult> {
+/**
+ * Aktif ilanları filtreler, sıralar ve sayfalar.
+ * React cache()'li: /ilanlar sayfasında sonuç sayısı ile ızgara ayrı Suspense
+ * sınırlarında ama AYNI `filters` nesne referansıyla çağrılır → tek sorgu seti.
+ */
+export const searchListings = cache(async function searchListings(
+  f: FilterState,
+): Promise<SearchResult> {
   const conditions = buildConditions(f);
   const where = and(...conditions);
 
@@ -222,7 +230,7 @@ export async function searchListings(f: FilterState): Promise<SearchResult> {
   );
 
   return { results, total, page, totalPages };
-}
+});
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
