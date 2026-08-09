@@ -13,12 +13,12 @@ import { ContactBox } from "./ContactBox";
 import { OwnerCard } from "./OwnerCard";
 import { SimilarListings } from "./SimilarListings";
 import { Badge } from "@/components/ui/Badge";
+import { CONDITION_LABELS } from "@/lib/constants";
 import {
   CheckIcon,
   ClockIcon,
   GaugeIcon,
   MapPinIcon,
-  ShieldCheckIcon,
   StarIcon,
   TruckIcon,
 } from "@/components/ui/icons";
@@ -74,23 +74,24 @@ export function ListingDetail({
         <div className="lg:col-span-2">
           <Gallery
             id={listing.id}
-            icon={category?.icon ?? "🛠️"}
             baseSeed={listing.photoSeed ?? 0}
             count={listing.photoCount ?? 1}
             label={`${listing.brand} ${listing.model}`}
             photos={listing.photos}
+            videoUrl={listing.videoUrl}
           />
 
           <div className="mt-6">
             <div className="flex flex-wrap items-center gap-2">
               {category && <Badge tone="neutral">{category.name}</Badge>}
+              <Badge tone={listing.condition === "sifir" ? "success" : "neutral"}>
+                {CONDITION_LABELS[listing.condition]}
+              </Badge>
               <Badge tone={listing.operator ? "info" : "neutral"}>
                 {listing.operator ? "Operatörlü" : "Operatörsüz"}
               </Badge>
-              {listing.transport === "dahil" && <Badge tone="success">Nakliye Dahil</Badge>}
-              {owner?.verified && (
-                <Badge tone="success" icon={<ShieldCheckIcon size={12} />}>Doğrulanmış Satıcı</Badge>
-              )}
+              {listing.transport !== "yok" && <Badge tone="success">Nakliye Var</Badge>}
+              {listing.videoUrl && <Badge tone="info">▶ Videolu</Badge>}
             </div>
 
             <h1 className="mt-3 text-2xl font-bold leading-tight sm:text-3xl">{listing.title}</h1>
@@ -200,7 +201,7 @@ export function ListingDetail({
 
               <div className="mt-4 border-t border-line pt-4">
                 {owner ? (
-                  <ContactBox owner={owner} listingId={listing.id} />
+                  <ContactBox owner={owner} listing={listing} />
                 ) : (
                   <p className="text-sm text-faint">İletişim bilgisi yükleniyor…</p>
                 )}

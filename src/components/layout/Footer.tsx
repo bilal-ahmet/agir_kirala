@@ -45,7 +45,7 @@ export function Footer() {
           <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-fg">Güven & Destek</h4>
           <ul className="space-y-2 text-sm text-muted">
             <li><span className="cursor-default">Güvenli Kiralama</span></li>
-            <li><span className="cursor-default">Doğrulanmış Firmalar</span></li>
+            <li><span className="cursor-default">Satıcı Rehberi</span></li>
             <li><span className="cursor-default">Sıkça Sorulan Sorular</span></li>
             <li><span className="cursor-default">Kullanım Şartları</span></li>
             <li><span className="cursor-default">Gizlilik Politikası</span></li>

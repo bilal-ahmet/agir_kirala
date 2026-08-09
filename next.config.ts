@@ -7,9 +7,9 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["postgres", "bcryptjs"],
   experimental: {
     serverActions: {
-      // Görseller tek tek yüklenir; tek istek en fazla 1 dosya (5 MB) + multipart payı taşır.
-      // Varsayılan 1 MB olduğundan foto yükleme "Body exceeded 1 MB limit" ile 500 veriyordu.
-      bodySizeLimit: "6mb",
+      // Medya tek tek yüklenir: görsel en fazla 5 MB, tanıtım videosu en fazla 25 MB
+      // (bkz. MAX_VIDEO_BYTES). Multipart payı için üstüne pay bırakılır.
+      bodySizeLimit: "30mb",
     },
   },
 };

@@ -6,7 +6,7 @@ import { formatPrice, formatUsage, primaryPrice } from "@/lib/format";
 import { ListingImage } from "./ListingImage";
 import { FavoriteButton } from "./FavoriteButton";
 import { Badge } from "@/components/ui/Badge";
-import { ClockIcon, GaugeIcon, MapPinIcon, ShieldCheckIcon, StarIcon } from "@/components/ui/icons";
+import { ClockIcon, GaugeIcon, MapPinIcon, StarIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
 export function ListingCard({
@@ -32,13 +32,14 @@ export function ListingCard({
       {/* Görsel */}
       <div className="relative">
         <ListingImage
-          icon={category?.icon ?? "🛠️"}
           seed={listing.photoSeed}
           photoUrl={listing.photos?.[0]?.url}
           className="aspect-[4/3] w-full"
+          width={640}
         />
         <div className="absolute left-2.5 top-2.5 flex flex-col items-start gap-1.5">
           {listing.featured && <Badge tone="accent">⭐ Öne Çıkan</Badge>}
+          {listing.videoUrl && <Badge tone="info">▶ Videolu</Badge>}
           <Badge tone={listing.operator ? "info" : "neutral"}>
             {listing.operator ? "Operatörlü" : "Operatörsüz"}
           </Badge>
@@ -78,9 +79,8 @@ export function ListingCard({
               <p className="text-sm text-faint">Fiyat için iletişime geçin</p>
             )}
           </div>
-          {listing.ownerRating != null && (
+          {listing.ownerRating != null && listing.ownerRating > 0 && (
             <div className="flex items-center gap-1 text-xs text-muted">
-              {listing.ownerVerified && <ShieldCheckIcon size={14} className="text-success" />}
               <StarIcon size={13} filled className="text-accent" />
               {listing.ownerRating.toFixed(1)}
             </div>

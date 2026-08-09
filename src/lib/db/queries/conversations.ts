@@ -6,6 +6,9 @@ import { conversations, listings, messages, users } from "../schema";
 import type { Conversation, Message } from "../../types";
 import { toConversation, toMessage } from "./mappers";
 
+/** Mesajlar sayfasında sohbet başına gösterilen en fazla mesaj sayısı. */
+const MESSAGES_PER_CONVERSATION = 50;
+
 export interface ConversationView {
   id: string;
   listingId: string;
@@ -29,8 +32,29 @@ export async function conversationViewsFor(userId: string): Promise<Conversation
     ...new Set(convRows.map((c) => (c.renterId === userId ? c.ownerId : c.renterId))),
   ];
 
+  // Sohbet başına yalnızca son MESSAGES_PER_CONVERSATION mesaj. Eskiden kullanıcının
+  // tüm sohbetlerinin tüm mesajları limitsiz çekiliyordu.
+  const ranked = db
+    .select({
+      id: messages.id,
+      conversationId: messages.conversationId,
+      senderId: messages.senderId,
+      text: messages.text,
+      createdAt: messages.createdAt,
+      rn: sql<number>`row_number() over (partition by ${messages.conversationId} order by ${messages.createdAt} desc)`.as(
+        "rn",
+      ),
+    })
+    .from(messages)
+    .where(inArray(messages.conversationId, convIds))
+    .as("ranked");
+
   const [msgRows, listingRows, userRows] = await Promise.all([
-    db.select().from(messages).where(inArray(messages.conversationId, convIds)).orderBy(asc(messages.createdAt)),
+    db
+      .select()
+      .from(ranked)
+      .where(sql`${ranked.rn} <= ${MESSAGES_PER_CONVERSATION}`)
+      .orderBy(asc(ranked.createdAt)),
     db.select({ id: listings.id, title: listings.title }).from(listings).where(inArray(listings.id, listingIds)),
     db.select({ id: users.id, name: users.name, accent: users.accent }).from(users).where(inArray(users.id, otherIds)),
   ]);

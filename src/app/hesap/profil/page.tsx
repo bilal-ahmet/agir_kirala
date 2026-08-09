@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { OWNER_TYPE_LABELS } from "@/lib/constants";
-import { CheckIcon, ShieldCheckIcon } from "@/components/ui/icons";
+import { CheckIcon } from "@/components/ui/icons";
 
 export default function ProfilPage() {
   const { user } = useAuth();
@@ -18,6 +18,7 @@ export default function ProfilPage() {
 
   if (!user) return null;
   const saved = !pending && state.success === true;
+  const fieldErrors = state.fieldErrors ?? {};
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -34,24 +35,31 @@ export default function ProfilPage() {
             <Badge tone={user.type === "kurumsal" ? "info" : "neutral"}>
               {OWNER_TYPE_LABELS[user.type]}
             </Badge>
-            {user.verified ? (
-              <Badge tone="success" icon={<ShieldCheckIcon size={12} />}>Doğrulanmış</Badge>
-            ) : (
-              <Badge tone="warning">Doğrulanmamış</Badge>
-            )}
           </div>
           <p className="mt-1 text-xs text-faint">Üyelik: {formatMonthYear(user.memberSince)}</p>
         </div>
       </div>
 
-      <form action={formAction} className="space-y-4 rounded-lg border border-line bg-surface p-5">
-        <Field label={user.type === "kurumsal" ? "Yetkili Ad Soyad" : "Ad Soyad"}>
-          <Input name="name" defaultValue={user.name} required />
+      <form action={formAction} className="space-y-4 rounded-lg border border-line bg-surface p-5" noValidate>
+        <p className="text-xs text-faint">
+          <span className="font-semibold text-danger">*</span> işaretli alanlar zorunludur.
+        </p>
+
+        <Field
+          label={user.type === "kurumsal" ? "Yetkili Ad Soyad" : "Ad Soyad"}
+          required
+          error={fieldErrors.name}
+        >
+          <Input name="name" defaultValue={user.name} aria-invalid={!!fieldErrors.name} />
         </Field>
 
         {user.type === "kurumsal" && (
-          <Field label="Firma Adı">
-            <Input name="companyName" defaultValue={user.companyName ?? ""} />
+          <Field label="Firma Adı" error={fieldErrors.companyName}>
+            <Input
+              name="companyName"
+              defaultValue={user.companyName ?? ""}
+              aria-invalid={!!fieldErrors.companyName}
+            />
           </Field>
         )}
 
@@ -60,12 +68,21 @@ export default function ProfilPage() {
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Telefon">
-            <Input name="phone" defaultValue={user.phone} placeholder="05XX XXX XX XX" required />
+          <Field
+            label="Telefon"
+            hint="Boş bırakırsanız ilanlarınızda telefon/WhatsApp gösterilmez."
+            error={fieldErrors.phone}
+          >
+            <Input
+              name="phone"
+              defaultValue={user.phone}
+              placeholder="05XX XXX XX XX"
+              aria-invalid={!!fieldErrors.phone}
+            />
           </Field>
-          <Field label="Şehir">
-            <Select name="city" defaultValue={user.city}>
-              <option value="">Seçin</option>
+          <Field label="Şehir" required error={fieldErrors.city}>
+            <Select name="city" defaultValue={user.city} aria-invalid={!!fieldErrors.city}>
+              <option value="">Seçiniz</option>
               {PROVINCE_NAMES.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
@@ -73,7 +90,11 @@ export default function ProfilPage() {
           </Field>
         </div>
 
-        {state.error && <p className="text-sm text-danger">{state.error}</p>}
+        {state.error && (
+          <p role="alert" className="text-sm text-danger">
+            {state.error}
+          </p>
+        )}
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={pending}>Değişiklikleri Kaydet</Button>

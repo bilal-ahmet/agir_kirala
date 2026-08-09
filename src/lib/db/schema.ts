@@ -38,6 +38,11 @@ export const rentalPeriodEnum = pgEnum("rental_period", [
   "aylik",
   "yillik",
 ]);
+export const listingConditionEnum = pgEnum("listing_condition", ["sifir", "ikinci_el"]);
+export const contactPreferenceEnum = pgEnum("contact_preference", [
+  "telefon_mesaj",
+  "sadece_mesaj",
+]);
 
 // ───────── users ─────────
 export const users = pgTable(
@@ -81,6 +86,14 @@ export const listings = pgTable(
     operator: boolean("operator").notNull().default(false),
     transport: transportOptionEnum("transport").notNull().default("yok"),
     fuel: fuelTypeEnum("fuel"),
+    condition: listingConditionEnum("condition").notNull().default("ikinci_el"),
+    // İlan sahibi telefonunu paylaşmak istemiyorsa "sadece_mesaj" seçer.
+    contactPreference: contactPreferenceEnum("contact_preference")
+      .notNull()
+      .default("telefon_mesaj"),
+    // İlan başına tek tanıtım videosu (Supabase Storage).
+    videoUrl: text("video_url"),
+    videoPath: text("video_path"),
     usage: integer("usage").notNull().default(0),
     specs: jsonb("specs")
       .$type<Record<string, string | number | boolean>>()
@@ -107,6 +120,8 @@ export const listings = pgTable(
     index("listings_featured_idx").on(t.featured),
     index("listings_year_idx").on(t.year),
     index("listings_created_idx").on(t.createdAt),
+    index("listings_condition_idx").on(t.condition),
+    index("listings_video_idx").on(t.videoUrl),
     index("listings_specs_gin").using("gin", t.specs),
   ],
 );
@@ -256,7 +271,32 @@ export const sessions = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("sessions_token_unique").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
+  (t) => [
+    unique("sessions_token_unique").on(t.tokenHash),
+    index("sessions_user_idx").on(t.userId),
+    // Süresi geçmiş oturumların toplu temizliği için.
+    index("sessions_expires_idx").on(t.expiresAt),
+  ],
+);
+
+// ───────── password_reset_tokens ─────────
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // sessions ile aynı yaklaşım: ham token yalnızca e-postadaki linkte, DB'de SHA-256'sı.
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("password_reset_token_unique").on(t.tokenHash),
+    index("password_reset_user_idx").on(t.userId),
+  ],
 );
 
 // ───────── İlişkiler ─────────
@@ -268,6 +308,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   reviewsWritten: many(reviews, { relationName: "reviewer" }),
   reviewsReceived: many(reviews, { relationName: "target" }),
   sessions: many(sessions),
+  passwordResetTokens: many(passwordResetTokens),
 }));
 
 export const listingsRelations = relations(listings, ({ one, many }) => ({
@@ -335,6 +376,10 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
 
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+  user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] }),
+}));
+
 // ───────── Çıkarımsal tipler ─────────
 export type UserRow = typeof users.$inferSelect;
 export type ListingRow = typeof listings.$inferSelect;
@@ -344,3 +389,4 @@ export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type ReviewRow = typeof reviews.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
+export type PasswordResetTokenRow = typeof passwordResetTokens.$inferSelect;

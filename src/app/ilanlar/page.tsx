@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { parseFilters } from "@/lib/filters";
+import { parseFilters } from "@/lib/filter-params";
 import { searchListings } from "@/lib/db/queries/listings";
 import { getCategory } from "@/lib/categories";
 import { formatNumber } from "@/lib/format";
@@ -65,7 +65,7 @@ export default async function IlanlarPage({
       <div className="flex gap-6">
         {/* Masaüstü filtre kenar çubuğu */}
         <aside className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-lg border border-line bg-surface p-4 no-scrollbar">
+          <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-lg border border-line bg-surface p-4">
             <UrlFilterProvider>
               <FilterPanel />
             </UrlFilterProvider>

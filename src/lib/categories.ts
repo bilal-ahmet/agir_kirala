@@ -42,7 +42,6 @@ export const CATEGORIES: Category[] = [
     slug: "hafriyat",
     name: "Hafriyat Makineleri",
     tagline: "Kazı, yükleme ve hafriyat",
-    icon: "🚜",
     usageMetric: "saat",
     subcategories: [
       { slug: "beko-loder", name: "Beko Loder (Kazıcı Yükleyici)" },
@@ -66,7 +65,6 @@ export const CATEGORIES: Category[] = [
     slug: "damperli-kamyon",
     name: "Damperli Kamyonlar",
     tagline: "Hafriyat ve agrega taşıma",
-    icon: "🚚",
     usageMetric: "km",
     subcategories: [
       { slug: "10-teker", name: "10 Teker Damperli Kamyon" },
@@ -90,7 +88,6 @@ export const CATEGORIES: Category[] = [
     slug: "beton",
     name: "Beton Makineleri",
     tagline: "Beton üretim, iletim ve dağıtım",
-    icon: "🏭",
     usageMetric: "saat",
     subcategories: [
       { slug: "beton-mikseri", name: "Beton Mikseri" },
@@ -115,7 +112,6 @@ export const CATEGORIES: Category[] = [
     slug: "asfalt-yol",
     name: "Asfalt ve Yol Makineleri",
     tagline: "Sıkıştırma, serim ve yol bakımı",
-    icon: "🛣️",
     usageMetric: "saat",
     subcategories: [
       { slug: "asfalt-silindiri", name: "Asfalt Silindiri" },
@@ -145,7 +141,6 @@ export const CATEGORIES: Category[] = [
     slug: "vinc-platform",
     name: "Vinçler ve Platformlar",
     tagline: "Ağır kaldırma ve yüksekte erişim",
-    icon: "🏗️",
     usageMetric: "saat",
     subcategories: [
       { slug: "kule-vinc", name: "Kule Vinç" },
@@ -178,7 +173,6 @@ export const CATEGORIES: Category[] = [
     slug: "forklift",
     name: "Forkliftler",
     tagline: "İstifleme ve yük taşıma",
-    icon: "🛻",
     usageMetric: "saat",
     subcategories: [
       { slug: "telehandler", name: "Telehandler (Teleskopik Yükleyici)" },
@@ -202,7 +196,6 @@ export const CATEGORIES: Category[] = [
     slug: "jenerator",
     name: "Jeneratörler",
     tagline: "Enerji, aydınlatma ve basınçlı hava",
-    icon: "⚡",
     usageMetric: "saat",
     subcategories: [
       { slug: "kabinli-dizel", name: "Kabinli Dizel Jeneratör" },

@@ -7,11 +7,20 @@ export type RentalPeriod = "saatlik" | "gunluk" | "haftalik" | "aylik" | "yillik
 /** İlan sahibi tipi */
 export type OwnerType = "bireysel" | "kurumsal";
 
-/** Teslimat / nakliye seçeneği */
+/** Nakliye seçeneği */
 export type TransportOption = "dahil" | "ekstra" | "yok";
 
 /** Yakıt tipi */
 export type FuelType = "dizel" | "benzin" | "elektrik" | "lpg" | "hibrit";
+
+/** İlanın durumu: sıfır mı, ikinci el mi */
+export type ListingCondition = "sifir" | "ikinci_el";
+
+/** İlan sahibinin iletişim tercihi. "sadece_mesaj" → telefon/WhatsApp gösterilmez. */
+export type ContactPreference = "telefon_mesaj" | "sadece_mesaj";
+
+/** Filtrede nakliye seçimi (transport değerlerinin kullanıcıya görünen sadeleştirmesi) */
+export type TransportFilter = "var" | "yok";
 
 /** İlan durumu */
 export type ListingStatus = "aktif" | "pasif" | "taslak";
@@ -47,8 +56,6 @@ export interface Category {
   name: string;
   /** Kısa açıklama (kategori kartı) */
   tagline: string;
-  /** Görsel/placeholder için emoji-glif */
-  icon: string;
   subcategories: SubCategory[];
   /** Bu kategorideki ilanların teknik özellik şeması */
   specFields: SpecField[];
@@ -105,6 +112,12 @@ export interface Listing {
   operator: boolean;
   transport: TransportOption;
   fuel?: FuelType;
+  /** Sıfır / 2. el */
+  condition: ListingCondition;
+  /** Telefon + mesaj mı, yalnızca site içi mesaj mı */
+  contactPreference: ContactPreference;
+  /** Yüklenmiş tanıtım videosunun public URL'si (varsa) */
+  videoUrl?: string;
   /** Kullanım: kategoriye göre saat (motosaat) veya km */
   usage: number;
   /** Kategoriye özel teknik özellikler (SpecField.key → değer) */
@@ -168,7 +181,10 @@ export interface Conversation {
   updatedAt: string;
 }
 
-/** searchParams'tan türetilen filtre durumu */
+/**
+ * searchParams'tan türetilen filtre durumu.
+ * Çoklu seçimli alanlar dizi tutar ve URL'de virgülle ayrılır (ör. `yakit=dizel,elektrik`).
+ */
 export interface FilterState {
   q?: string;
   kategori?: string;
@@ -182,10 +198,14 @@ export interface FilterState {
   minYil?: number;
   maxYil?: number;
   operator?: "operatorlu" | "operatorsuz";
-  nakliye?: TransportOption;
-  saticiTipi?: OwnerType;
-  dogrulanmis?: boolean;
-  yakit?: FuelType;
+  nakliye?: TransportFilter[];
+  saticiTipi?: OwnerType[];
+  yakit?: FuelType[];
+  durum?: ListingCondition[];
+  /** Yalnızca fotoğrafı olan ilanlar */
+  fotografli?: boolean;
+  /** Yalnızca videosu olan ilanlar */
+  videolu?: boolean;
   /** Dinamik teknik filtreler: specKey → min değer (number) veya tam eşleşme (string) */
   specs?: Record<string, number | string>;
   sirala?: SortKey;

@@ -4,17 +4,17 @@ import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { sessions, users } from "../db/schema";
+import { favorites, sessions, users } from "../db/schema";
 import { toUser } from "../db/queries/mappers";
 import type { User } from "../types";
 import { SESSION_COOKIE } from "./cookie";
 
 export { SESSION_COOKIE };
-const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 gün
+const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 gün
 
-function hashToken(token: string): string {
+export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
@@ -23,6 +23,12 @@ export async function createSession(userId: string): Promise<void> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + MAX_AGE_MS);
   await db.insert(sessions).values({ userId, tokenHash: hashToken(token), expiresAt });
+
+  // Süresi geçmiş satırları fırsat buldukça temizle (tablo aksi halde sonsuza dek büyür).
+  void db
+    .delete(sessions)
+    .where(lt(sessions.expiresAt, new Date()))
+    .catch(() => {});
 
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
@@ -34,20 +40,44 @@ export async function createSession(userId: string): Promise<void> {
   });
 }
 
-/** Geçerli oturum kullanıcısı (yoksa null). Request kapsamında memoize. */
-export const getCurrentUser = cache(async (): Promise<User | null> => {
+export interface SessionContext {
+  user: User | null;
+  favoriteIds: string[];
+}
+
+/**
+ * Oturum kullanıcısı + favori ilan id'leri — TEK sorguda.
+ * RootLayout her istekte bunu çağırdığı için iki ayrı seri sorgu tüm sayfalara
+ * gecikme ekliyordu; sessions ⋈ users ⟕ favorites tek round-trip ile çözülür.
+ * Request kapsamında memoize.
+ */
+export const getSessionContext = cache(async (): Promise<SessionContext> => {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+  if (!token) return { user: null, favoriteIds: [] };
 
   const rows = await db
-    .select({ user: users })
+    .select({
+      user: users,
+      favoriteIds: sql<
+        string[]
+      >`coalesce(array_agg(${favorites.listingId}) filter (where ${favorites.listingId} is not null), '{}')`,
+    })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
+    .leftJoin(favorites, eq(favorites.userId, users.id))
     .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())))
+    .groupBy(users.id)
     .limit(1);
 
-  return rows.length ? toUser(rows[0].user) : null;
+  if (!rows.length) return { user: null, favoriteIds: [] };
+  return { user: toUser(rows[0].user), favoriteIds: rows[0].favoriteIds ?? [] };
+});
+
+/** Geçerli oturum kullanıcısı (yoksa null). Request kapsamında memoize. */
+export const getCurrentUser = cache(async (): Promise<User | null> => {
+  const { user } = await getSessionContext();
+  return user;
 });
 
 /** Oturum zorunlu — yoksa /giris'e yönlendirir. */

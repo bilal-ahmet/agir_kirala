@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { Listing, RentalRequest, RequestStatus } from "@/lib/types";
 import { updateRequestStatusAction } from "@/lib/actions/requests";
-import { getCategory } from "@/lib/categories";
 import { PERIOD_LABELS } from "@/lib/constants";
 import { formatDate, formatPrice } from "@/lib/format";
 import { ListingImage } from "@/components/listing/ListingImage";
@@ -28,7 +27,6 @@ interface RequestCardProps {
 }
 
 export function RequestCard({ request, role, listing, counterpartName }: RequestCardProps) {
-  const category = listing ? getCategory(listing.categorySlug) : undefined;
   const status = STATUS[request.status];
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -48,10 +46,8 @@ export function RequestCard({ request, role, listing, counterpartName }: Request
       <div className="flex gap-4">
         <Link href={`/ilanlar/${request.listingId}`} className="shrink-0">
           <ListingImage
-            icon={category?.icon ?? "🛠️"}
             seed={listing?.photoSeed}
             className="h-20 w-28"
-            iconSize="text-3xl"
             rounded="rounded-md"
           />
         </Link>

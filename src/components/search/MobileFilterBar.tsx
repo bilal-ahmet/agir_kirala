@@ -8,7 +8,7 @@ import { useFilters } from "./use-filters";
 import { UrlFilterProvider } from "./filter-controller";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { FilterIcon } from "@/components/ui/icons";
-import { parseFilters, activeFilterCount } from "@/lib/filters";
+import { parseFilters, activeFilterCount } from "@/lib/filter-params";
 
 export function MobileFilterBar() {
   const [open, setOpen] = useState(false);

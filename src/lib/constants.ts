@@ -1,8 +1,10 @@
 import type {
   FuelType,
+  ListingCondition,
   OwnerType,
   RentalPeriod,
   SortKey,
+  TransportFilter,
   TransportOption,
 } from "./types";
 
@@ -53,6 +55,25 @@ export const TRANSPORT_LABELS: Record<TransportOption, string> = {
   yok: "Nakliye Yok (Müşteri Alır)",
 };
 
+/** Filtredeki sadeleştirilmiş nakliye seçimi. "var" = dahil veya ekstra. */
+export const NAKLIYE_LABELS: Record<TransportFilter, string> = {
+  var: "Nakliye Var",
+  yok: "Nakliye Yok",
+};
+
+/** "var" seçiminin karşılık geldiği transport değerleri. */
+export const TRANSPORT_VAR_VALUES: TransportOption[] = ["dahil", "ekstra"];
+
+export const CONDITION_LABELS: Record<ListingCondition, string> = {
+  sifir: "Sıfır",
+  ikinci_el: "2. El",
+};
+
+export const FUEL_TYPES: FuelType[] = ["dizel", "benzin", "elektrik", "lpg", "hibrit"];
+export const OWNER_TYPES: OwnerType[] = ["bireysel", "kurumsal"];
+export const CONDITIONS: ListingCondition[] = ["sifir", "ikinci_el"];
+export const TRANSPORT_FILTERS: TransportFilter[] = ["var", "yok"];
+
 export const OWNER_TYPE_LABELS: Record<OwnerType, string> = {
   bireysel: "Bireysel",
   kurumsal: "Kurumsal",
@@ -71,3 +92,7 @@ export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 export const MIN_YEAR = 2005;
 export const MAX_YEAR = new Date().getFullYear();
 export const RESULTS_PER_PAGE = 12;
+
+/** İlan videosu — next.config.ts serverActions.bodySizeLimit ("30mb") ile uyumlu olmalı. */
+export const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
+export const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
