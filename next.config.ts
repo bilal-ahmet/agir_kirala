@@ -5,18 +5,11 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   // DB sürücüsü ve bcrypt server tarafında native/CJS olarak dışarıda tutulur (bundle edilmez).
   serverExternalPackages: ["postgres", "bcryptjs"],
-  experimental: {
-    serverActions: {
-      // Medya tek tek yüklenir: görsel en fazla 5 MB, tanıtım videosu en fazla 25 MB
-      // (bkz. MAX_VIDEO_BYTES). Multipart payı için üstüne pay bırakılır.
-      bodySizeLimit: "30mb",
-    },
-    // Emniyet payı: proxy ile eşleşen bir isteğin gövdesi belleğe klonlanır ve
-    // varsayılan 10MB'ı aşınca sessizce KIRPILIR ("Unexpected end of form" → 500).
-    // Yükleme istekleri src/proxy.ts'te matcher ile zaten muaf tutuluyor; bu ayar
-    // ileride proxy kapsamına giren büyük bir POST olursa 500 yerine çalışmasını sağlar.
-    proxyClientMaxBodySize: "32mb",
-  },
+  // Not: serverActions.bodySizeLimit BİLEREK varsayılanda (1 MB) bırakıldı.
+  // Medya dosyaları artık server action gövdesinde taşınmıyor; tarayıcıdan
+  // doğrudan Supabase Storage'a gidiyor (src/lib/actions/uploads.ts).
+  // Limiti yükseltmek Vercel'de zaten işe yaramıyordu: Serverless Function
+  // istek gövdesi 4.5 MB ile platform tarafında sabit sınırlı.
 };
 
 export default nextConfig;

@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { useAuth } from "@/context/auth-context";
 import { createListingAction, type CreateListingInput } from "@/lib/actions/listings";
-import { uploadListingPhotosAction } from "@/lib/actions/photos";
-import { uploadListingVideoAction } from "@/lib/actions/videos";
+import { uploadListingMedia } from "@/lib/upload-client";
 import { CATEGORIES, getCategory } from "@/lib/categories";
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
@@ -76,6 +75,13 @@ export default function IlanEklePage() {
   // İlan kaydedildi ama medya yüklenemedi durumu — ayrı tutulur, çünkü bu bir
   // form doğrulama hatası değil ve kullanıcı ilanlarım sayfasına yönlendirilmez.
   const [mediaError, setMediaError] = useState<string | null>(null);
+  // Doğrudan yükleme ilerlemesi (15 MB video için yüzde göstermek şart).
+  const [uploadState, setUploadState] = useState<{
+    ad: string;
+    sira: number;
+    toplam: number;
+    oran: number;
+  } | null>(null);
   const [pending, startTransition] = useTransition();
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const photoPreviews = useMemo(() => photoFiles.map((f) => URL.createObjectURL(f)), [photoFiles]);
@@ -256,26 +262,27 @@ export default function IlanEklePage() {
         setError(res.error ?? "İlan oluşturulamadı.");
         return;
       }
-      // İlan oluşturuldu → seçilen medyayı yükle.
-      // Dosyalar tek tek gönderilir: tek bir server action isteği bodySizeLimit'i aşmasın.
-      // Yükleme bir istisna fırlatırsa (ağ kopması, gövde limiti vb.) ilan kaydedilmiş
-      // olur; kullanıcıyı sessizce yönlendirmek yerine durumu açıkça bildiriyoruz.
+      // İlan oluşturuldu → seçilen medyayı DOĞRUDAN Supabase'e yükle.
+      // Dosyalar Next sunucusundan geçmez; ayrıntı için src/lib/actions/uploads.ts.
       const medyaHatalari: string[] = [];
+      const yuklenecek: { kind: "photo" | "video"; file: File }[] = [
+        ...photoFiles.map((file) => ({ kind: "photo" as const, file })),
+        ...(videoFile ? [{ kind: "video" as const, file: videoFile }] : []),
+      ];
+
       try {
-        for (const f of photoFiles) {
-          const fd = new FormData();
-          fd.append("photos", f);
-          const up = await uploadListingPhotosAction(res.id, fd);
-          if (up.error) medyaHatalari.push(`${f.name}: ${up.error}`);
-        }
-        if (videoFile) {
-          const fd = new FormData();
-          fd.append("video", videoFile);
-          const up = await uploadListingVideoAction(res.id, fd);
-          if (up.error) medyaHatalari.push(`${videoFile.name}: ${up.error}`);
+        for (let i = 0; i < yuklenecek.length; i++) {
+          const { kind, file } = yuklenecek[i];
+          setUploadState({ ad: file.name, sira: i + 1, toplam: yuklenecek.length, oran: 0 });
+          const up = await uploadListingMedia(res.id, kind, file, (oran) =>
+            setUploadState({ ad: file.name, sira: i + 1, toplam: yuklenecek.length, oran }),
+          );
+          if (up.error) medyaHatalari.push(`${file.name}: ${up.error}`);
         }
       } catch (e) {
         medyaHatalari.push(e instanceof Error ? e.message : "Medya yüklenemedi.");
+      } finally {
+        setUploadState(null);
       }
 
       if (medyaHatalari.length) {
@@ -308,6 +315,28 @@ export default function IlanEklePage() {
     setMediaError(null);
     submitListing("aktif");
   };
+
+  /** Doğrudan yükleme sırasında gösterilen ilerleme çubuğu. */
+  const yuklemeGostergesi = uploadState ? (
+    <div
+      role="status"
+      className="rounded-lg border border-accent/40 bg-accent-soft px-4 py-3 text-sm"
+    >
+      <p className="font-semibold text-accent">
+        Medya yükleniyor — {uploadState.sira}/{uploadState.toplam}
+      </p>
+      <p className="mt-0.5 truncate text-xs text-muted">{uploadState.ad}</p>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-3">
+        <div
+          className="h-full rounded-full bg-accent transition-all"
+          style={{ width: `${Math.round(uploadState.oran * 100)}%` }}
+        />
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        %{Math.round(uploadState.oran * 100)} — lütfen sayfayı kapatmayın.
+      </p>
+    </div>
+  ) : null;
 
   /** İlan kaydedildi ama medya yüklenemedi uyarısı + ilanlarıma git bağlantısı. */
   const mediaUyarisi = mediaError ? (
@@ -347,6 +376,7 @@ export default function IlanEklePage() {
         </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}
+        {yuklemeGostergesi}
         {mediaUyarisi}
 
         {/* Gerçek ilan detay görünümü */}
@@ -737,6 +767,7 @@ export default function IlanEklePage() {
         )}
 
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+        {uploadState && <div className="mt-4">{yuklemeGostergesi}</div>}
         {mediaError && <div className="mt-4">{mediaUyarisi}</div>}
 
         {/* Gezinme */}
