@@ -56,6 +56,7 @@ const OWNER_TYPES = ["bireysel", "kurumsal"] as const;
 const CONDITIONS = ["sifir", "ikinci_el"] as const;
 const TRANSPORTS = ["var", "yok"] as const;
 const OPERATORS = ["operatorlu", "operatorsuz"] as const;
+const RENTAL_PERIODS = ["saatlik", "gunluk", "haftalik", "aylik", "yillik"] as const;
 
 /** searchParams nesnesini FilterState'e çevirir. */
 export function parseFilters(params: RawParams): FilterState {
@@ -78,7 +79,7 @@ export function parseFilters(params: RawParams): FilterState {
     marka: markaRaw ? markaRaw.split(",").filter(Boolean) : undefined,
     il: str(params.il),
     ilce: str(params.ilce),
-    periyot: str(params.periyot) as RentalPeriod | undefined,
+    periyot: list<RentalPeriod>(params.periyot, RENTAL_PERIODS),
     minFiyat: nonNegative(params.minFiyat),
     maxFiyat: nonNegative(params.maxFiyat),
     minYil: nonNegative(params.minYil),
@@ -103,7 +104,7 @@ export function activeFilterCount(f: FilterState): number {
   if (f.marka?.length) n += f.marka.length;
   if (f.il) n++;
   if (f.ilce) n++;
-  if (f.periyot) n++;
+  if (f.periyot?.length) n += f.periyot.length;
   if (f.minFiyat != null || f.maxFiyat != null) n++;
   if (f.minYil != null || f.maxYil != null) n++;
   if (f.operator?.length) n += f.operator.length;

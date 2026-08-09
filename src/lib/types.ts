@@ -195,7 +195,7 @@ export interface FilterState {
   marka?: string[];
   il?: string;
   ilce?: string;
-  periyot?: RentalPeriod;
+  periyot?: RentalPeriod[];
   minFiyat?: number;
   maxFiyat?: number;
   minYil?: number;

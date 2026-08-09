@@ -58,8 +58,7 @@ export function ActiveFilterChips() {
   if (sp.get("il")) chips.push({ label: sp.get("il")!, onRemove: () => update((p) => { p.delete("il"); p.delete("ilce"); }) });
   if (sp.get("ilce")) chips.push({ label: sp.get("ilce")!, onRemove: () => setParam("ilce", "") });
 
-  const periyot = sp.get("periyot") as RentalPeriod | null;
-  if (periyot) chips.push({ label: PERIOD_LABELS[periyot], onRemove: () => setParam("periyot", "") });
+  listChips("periyot", (v) => PERIOD_LABELS[v as RentalPeriod] ?? v);
 
   const minF = sp.get("minFiyat");
   const maxF = sp.get("maxFiyat");
