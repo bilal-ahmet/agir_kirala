@@ -73,6 +73,9 @@ export default function IlanEklePage() {
   const [previewing, setPreviewing] = useState(false);
   const [seed] = useState(() => Math.floor(Math.random() * 999));
   const [error, setError] = useState<string | null>(null);
+  // İlan kaydedildi ama medya yüklenemedi durumu — ayrı tutulur, çünkü bu bir
+  // form doğrulama hatası değil ve kullanıcı ilanlarım sayfasına yönlendirilmez.
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const photoPreviews = useMemo(() => photoFiles.map((f) => URL.createObjectURL(f)), [photoFiles]);
@@ -165,7 +168,11 @@ export default function IlanEklePage() {
     status: "aktif",
     createdAt: new Date().toISOString(),
     photoSeed: seed,
-    photoCount: 3,
+    // Önizlemede SEÇİLEN gerçek görseller gösterilir (blob: object URL'leri).
+    // Eskiden burası boştu, bu yüzden önizlemede yüklenen fotoğraflar yerine
+    // placeholder gradyanlar görünüyordu.
+    photoCount: photoPreviews.length || undefined,
+    photos: photoPreviews.map((url, i) => ({ id: `preview-${i}`, url })),
     ...(videoPreview ? { videoUrl: videoPreview } : {}),
     ...(hasAvailability ? { availability: form.availability } : {}),
   };
@@ -251,22 +258,31 @@ export default function IlanEklePage() {
       }
       // İlan oluşturuldu → seçilen medyayı yükle.
       // Dosyalar tek tek gönderilir: tek bir server action isteği bodySizeLimit'i aşmasın.
-      const uploadWarnings: string[] = [];
-      for (const f of photoFiles) {
-        const fd = new FormData();
-        fd.append("photos", f);
-        const up = await uploadListingPhotosAction(res.id, fd);
-        if (up.error) uploadWarnings.push(up.error);
+      // Yükleme bir istisna fırlatırsa (ağ kopması, gövde limiti vb.) ilan kaydedilmiş
+      // olur; kullanıcıyı sessizce yönlendirmek yerine durumu açıkça bildiriyoruz.
+      const medyaHatalari: string[] = [];
+      try {
+        for (const f of photoFiles) {
+          const fd = new FormData();
+          fd.append("photos", f);
+          const up = await uploadListingPhotosAction(res.id, fd);
+          if (up.error) medyaHatalari.push(`${f.name}: ${up.error}`);
+        }
+        if (videoFile) {
+          const fd = new FormData();
+          fd.append("video", videoFile);
+          const up = await uploadListingVideoAction(res.id, fd);
+          if (up.error) medyaHatalari.push(`${videoFile.name}: ${up.error}`);
+        }
+      } catch (e) {
+        medyaHatalari.push(e instanceof Error ? e.message : "Medya yüklenemedi.");
       }
-      if (videoFile) {
-        const fd = new FormData();
-        fd.append("video", videoFile);
-        const up = await uploadListingVideoAction(res.id, fd);
-        if (up.error) uploadWarnings.push(up.error);
-      }
-      if (uploadWarnings.length) {
-        // İlan kaydedildi ama medya yüklenemedi — ilanlarım sayfasından tekrar denenebilir.
-        console.warn(uploadWarnings.join(" · "));
+
+      if (medyaHatalari.length) {
+        setMediaError(
+          `İlanınız kaydedildi ancak bazı dosyalar yüklenemedi: ${medyaHatalari.join(" · ")} — İlanlarım sayfasından ilanı düzenleyip tekrar deneyebilirsiniz.`,
+        );
+        return;
       }
       router.push(status === "taslak" ? "/hesap/ilanlarim?durum=taslak" : "/hesap/ilanlarim");
     });
@@ -289,8 +305,25 @@ export default function IlanEklePage() {
       setStep(3);
       return;
     }
+    setMediaError(null);
     submitListing("aktif");
   };
+
+  /** İlan kaydedildi ama medya yüklenemedi uyarısı + ilanlarıma git bağlantısı. */
+  const mediaUyarisi = mediaError ? (
+    <div
+      role="alert"
+      className="rounded-lg border border-warning/40 bg-accent-soft px-4 py-3 text-sm text-warning"
+    >
+      <p>{mediaError}</p>
+      <Link
+        href="/hesap/ilanlarim"
+        className="mt-1.5 inline-block font-semibold text-accent hover:underline"
+      >
+        İlanlarım sayfasına git →
+      </Link>
+    </div>
+  ) : null;
 
   // ───────── önizleme ekranı (ilan sayfası gibi) ─────────
   if (previewing) {
@@ -314,6 +347,7 @@ export default function IlanEklePage() {
         </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}
+        {mediaUyarisi}
 
         {/* Gerçek ilan detay görünümü */}
         <div className="overflow-hidden rounded-lg border border-line">
@@ -703,6 +737,7 @@ export default function IlanEklePage() {
         )}
 
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+        {mediaError && <div className="mt-4">{mediaUyarisi}</div>}
 
         {/* Gezinme */}
         <div className="mt-6 flex items-center justify-between gap-3 border-t border-line pt-5">

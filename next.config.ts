@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
       // (bkz. MAX_VIDEO_BYTES). Multipart payı için üstüne pay bırakılır.
       bodySizeLimit: "30mb",
     },
+    // Emniyet payı: proxy ile eşleşen bir isteğin gövdesi belleğe klonlanır ve
+    // varsayılan 10MB'ı aşınca sessizce KIRPILIR ("Unexpected end of form" → 500).
+    // Yükleme istekleri src/proxy.ts'te matcher ile zaten muaf tutuluyor; bu ayar
+    // ileride proxy kapsamına giren büyük bir POST olursa 500 yerine çalışmasını sağlar.
+    proxyClientMaxBodySize: "32mb",
   },
 };
 

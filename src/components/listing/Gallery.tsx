@@ -35,6 +35,10 @@ export function Gallery({ id, baseSeed, count, label, photos, videoUrl }: Galler
   const [active, setActive] = useState(0);
   const current = items[active] ?? items[0];
 
+  // Küçük görsel etiketlerinde "Fotoğraf 1, 2, 3…" numaralandırması (video sayılmaz).
+  let sayac = 0;
+  const photoNumaralari = items.map((it) => (it.kind === "photo" ? ++sayac : 0));
+
   return (
     <div>
       <div className="relative">
@@ -62,20 +66,35 @@ export function Gallery({ id, baseSeed, count, label, photos, videoUrl }: Galler
       </div>
 
       {items.length > 1 && (
-        <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           {items.map((item, i) => (
             <button
               key={i}
               onClick={() => setActive(i)}
+              aria-current={i === active}
               className={cn(
-                "relative shrink-0 overflow-hidden rounded-md border-2 transition-colors",
-                i === active ? "border-accent" : "border-transparent opacity-70 hover:opacity-100",
+                "relative shrink-0 overflow-hidden rounded-md border-2 transition-all",
+                i === active
+                  ? "border-accent"
+                  : "border-transparent opacity-60 hover:opacity-100",
               )}
-              aria-label={item.kind === "video" ? "Tanıtım videosu" : `Fotoğraf ${i + 1}`}
+              aria-label={
+                item.kind === "video" ? "Tanıtım videosu" : `Fotoğraf ${photoNumaralari[i]}`
+              }
             >
               {item.kind === "video" ? (
-                <span className="grid h-16 w-24 place-items-center rounded-md bg-surface-3 text-xl text-fg">
-                  ▶
+                <span className="relative block h-16 w-24 overflow-hidden rounded-md bg-black">
+                  {/* İlk kare önizleme olarak kullanılır (#t=0.1) */}
+                  <video
+                    src={`${item.url}#t=0.1`}
+                    preload="metadata"
+                    muted
+                    playsInline
+                    className="h-full w-full object-cover"
+                  />
+                  <span className="absolute inset-0 grid place-items-center bg-black/35 text-lg text-white">
+                    ▶
+                  </span>
                 </span>
               ) : (
                 <ListingImage

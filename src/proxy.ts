@@ -16,5 +16,21 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/hesap/:path*"],
+  matcher: [
+    {
+      source: "/hesap/:path*",
+      /**
+       * Server Action POST'ları proxy'den MUAF.
+       *
+       * Next 16, proxy ile eşleşen isteklerin gövdesini belleğe klonlar
+       * (experimental.proxyClientMaxBodySize, varsayılan 10MB). 10MB'ı aşan
+       * video yüklemesinde gövde kırpılıyor, multipart ayrıştırma
+       * "Unexpected end of form" ile patlıyor ve ilan-ekle 500 dönüyordu.
+       *
+       * Güvenlik kaybı yok: proxy yalnızca optimistik yönlendirme yapar;
+       * gerçek yetki her server action içinde verifySession() ile doğrulanır.
+       */
+      missing: [{ type: "header", key: "next-action" }],
+    },
+  ],
 };
