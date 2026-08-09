@@ -9,21 +9,19 @@ import { ShieldCheckIcon, TruckIcon, ClockIcon, UserIcon } from "@/components/ui
 const HOME_GRID_SIZE = 9;
 
 const TRUST = [
-  { icon: <ShieldCheckIcon />, title: "Doğrulanmış Firmalar", text: "Kurumsal satıcılar kimlik doğrulamasından geçer." },
+  { icon: <ShieldCheckIcon />, title: "Bireysel & Kurumsal", text: "Firma da bireysel sahip de aynı platformda." },
   { icon: <UserIcon />, title: "Operatörlü Seçenek", text: "Dilersen operatörüyle birlikte kirala." },
   { icon: <TruckIcon />, title: "Nakliye Çözümü", text: "Makineyi şantiyene kadar getirten ilanlar." },
   { icon: <ClockIcon />, title: "Esnek Süre", text: "Saatlik, günlük, haftalık ve aylık kiralama." },
 ];
 
 export default async function HomePage() {
-  const [all, total] = await Promise.all([activeListings(), countActiveListings()]);
-  const featured = all.filter((l) => l.featured);
-  // Her zaman dolu grid: öne çıkanlar yetmezse kalan aktif ilanlarla tamamla.
-  const gridItems = (
-    featured.length >= HOME_GRID_SIZE
-      ? featured
-      : [...featured, ...all.filter((l) => !l.featured)]
-  ).slice(0, HOME_GRID_SIZE);
+  // activeListings zaten "featured desc, createdAt desc" sıralı döner; grid kadarını
+  // çekmek yeterli (eskiden 60 ilan + foto + sahip çekilip 51'i atılıyordu).
+  const [gridItems, total] = await Promise.all([
+    activeListings(HOME_GRID_SIZE),
+    countActiveListings(),
+  ]);
 
   return (
     <>

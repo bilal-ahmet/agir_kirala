@@ -143,7 +143,7 @@ export function IlanlarimClient({ allListings }: { allListings: Listing[] }) {
             return (
               <div key={l.id} className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-4 sm:flex-row sm:items-center">
                 <Link href={`/ilanlar/${l.id}`} className="shrink-0">
-                  <ListingImage icon={category?.icon ?? "🛠️"} seed={l.photoSeed} photoUrl={l.photos?.[0]?.url} className="h-20 w-28" iconSize="text-3xl" rounded="rounded-md" />
+                  <ListingImage seed={l.photoSeed} photoUrl={l.photos?.[0]?.url} className="h-20 w-28" rounded="rounded-md" width={224} />
                 </Link>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

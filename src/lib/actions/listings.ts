@@ -7,7 +7,15 @@ import { db } from "../db";
 import { listings } from "../db/schema";
 import { verifySession } from "../auth/session";
 import { getCategory } from "../categories";
-import type { Availability, FuelType, ListingStatus, PriceMap } from "../types";
+import type {
+  Availability,
+  ContactPreference,
+  FuelType,
+  ListingCondition,
+  ListingStatus,
+  PriceMap,
+  TransportOption,
+} from "../types";
 
 const priceMapSchema = z.object({
   saatlik: z.number().positive().optional(),
@@ -36,7 +44,10 @@ const createListingSchema = z.object({
   district: z.string().trim().min(1, "İlçe seçin."),
   prices: priceMapSchema,
   operator: z.boolean().default(false),
+  transport: z.enum(["dahil", "ekstra", "yok"]).default("yok"),
   fuel: z.enum(["dizel", "benzin", "elektrik", "lpg", "hibrit"]).optional(),
+  condition: z.enum(["sifir", "ikinci_el"]).default("ikinci_el"),
+  contactPreference: z.enum(["telefon_mesaj", "sadece_mesaj"]).default("telefon_mesaj"),
   usage: z.number().int().min(0).default(0),
   specs: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
   description: z.string().trim().default(""),
@@ -57,7 +68,10 @@ export interface CreateListingInput {
   district: string;
   prices: PriceMap;
   operator?: boolean;
+  transport?: TransportOption;
   fuel?: FuelType;
+  condition?: ListingCondition;
+  contactPreference?: ContactPreference;
   usage?: number;
   specs?: Record<string, string | number | boolean>;
   description?: string;
@@ -88,6 +102,11 @@ export async function createListingAction(
     return { error: "Yayınlamak için saatlik ücret zorunludur." };
   }
 
+  // Telefonu olmayan kullanıcının ilanı zorunlu olarak "sadece site içi mesaj".
+  const contactPreference: ContactPreference = user.phone.trim()
+    ? d.contactPreference
+    : "sadece_mesaj";
+
   const [created] = await db
     .insert(listings)
     .values({
@@ -101,8 +120,10 @@ export async function createListingAction(
       district: d.district,
       prices: d.prices as PriceMap,
       operator: d.operator,
-      transport: "yok", // kullanıcı ilanlarında nakliye müşteriye ait.
+      transport: d.transport,
       fuel: d.fuel ?? null,
+      condition: d.condition,
+      contactPreference,
       usage: d.usage,
       specs: d.specs,
       description: d.description,

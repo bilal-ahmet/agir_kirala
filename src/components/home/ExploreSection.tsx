@@ -10,9 +10,8 @@ import { FilterControls } from "@/components/search/FilterControls";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { FilterIcon } from "@/components/ui/icons";
-import { activeFilterCount, parseFilters, searchListings } from "@/lib/filters";
+import { activeFilterCount, parseFilters } from "@/lib/filter-params";
 import { formatNumber } from "@/lib/format";
-import { useHydrated } from "@/lib/use-hydrated";
 
 /**
  * Ana sayfa "Filtrele & Keşfet" bölümü.
@@ -29,16 +28,17 @@ export function ExploreSection({
 }) {
   const { controller, sp, submit } = useLocalFilters();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const hydrated = useHydrated();
 
   const filters = useMemo(
     () => parseFilters(Object.fromEntries(sp.entries())),
     [sp],
   );
   const activeCount = useMemo(() => activeFilterCount(filters), [filters]);
-  // Canlı sonuç sayısı yalnızca hidrasyondan sonra (localStorage ilanları için mismatch güvenli).
-  const total = hydrated ? searchListings(filters).total : initialTotal;
-  const submitLabel = `Sonuçları Gör${hydrated ? ` (${formatNumber(total)})` : ""}`;
+  // Not: burada canlı sonuç sayısı hesaplanmaz. Eskiden istemcide mock veri
+  // üzerinden sayılıyordu ve gerçek DB sayısıyla uyuşmuyordu. Filtre uygulanmamışken
+  // sunucudan gelen toplam gösterilir, filtre seçilince sayı /ilanlar'da netleşir.
+  const submitLabel =
+    activeCount > 0 ? "Sonuçları Gör" : `Sonuçları Gör (${formatNumber(initialTotal)})`;
 
   return (
     <FilterControllerProvider value={controller}>
@@ -93,7 +93,7 @@ export function ExploreSection({
                     </button>
                   )}
                 </div>
-                <div className="overflow-y-auto px-4 no-scrollbar">
+                <div className="overflow-y-auto px-4">
                   <FilterControls collapsibleAdvanced />
                 </div>
                 <div className="border-t border-line p-3">

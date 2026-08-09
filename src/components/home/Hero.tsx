@@ -16,18 +16,21 @@ export async function Hero() {
             <span className="h-2 w-2 rounded-full bg-success" />
             {total}+ aktif ilan · Operatörlü & operatörsüz
           </span>
-          <h1 className="mt-5 text-4xl font-bold uppercase leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+          {/*
+            leading-[1.15]: Türkçe büyük harflerde İ'nin noktası ve Ğ'nin şapkası
+            cap-height'ın üstüne çıkıyor. Daha dar satır yüksekliğinde (1.05)
+            "KİRALAMA" bir üstteki "İŞ" ile çakışıyordu.
+          */}
+          <h1 className="mt-5 text-4xl font-bold uppercase leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">
             İş Makinesi ve <span className="text-accent">Ağır Vasıta</span> Kiralama
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-muted">
-            Ekskavatörden vince, forklifttten kamyona; ihtiyacın olan makineyi bul, güvenle kirala.
+            Ekskavatörden vince, forkliftten kamyona; ihtiyacın olan makineyi bul, güvenle kirala.
             Elindeki makineyi kiraya vererek kazanca dönüştür.
           </p>
         </div>
 
         <SearchBar className="mt-8 max-w-4xl" />
-
-        
       </div>
     </section>
   );

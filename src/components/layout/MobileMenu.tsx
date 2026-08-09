@@ -77,10 +77,9 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
                 key={c.slug}
                 href={`/ilanlar?kategori=${c.slug}`}
                 onClick={onClose}
-                className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-2 text-sm text-muted hover:text-fg"
+                className="rounded-md border border-line bg-surface-2 px-2.5 py-2 text-sm text-muted hover:text-fg"
               >
-                <span>{c.icon}</span>
-                <span className="truncate">{c.name}</span>
+                <span className="block truncate">{c.name}</span>
               </Link>
             ))}
           </div>

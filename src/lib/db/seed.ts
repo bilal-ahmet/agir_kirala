@@ -85,6 +85,8 @@ async function main() {
       operator: l.operator,
       transport: l.transport,
       fuel: l.fuel ?? null,
+      // Demo veride "durum" alanı yok — son iki model yılı sıfır sayılır.
+      condition: l.year >= new Date().getFullYear() - 1 ? ("sifir" as const) : ("ikinci_el" as const),
       usage: l.usage,
       specs: l.specs,
       description: l.description,

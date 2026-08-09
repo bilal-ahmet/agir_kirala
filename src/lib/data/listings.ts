@@ -1,10 +1,17 @@
 import type { Listing } from "../types";
 
-// Mock ilan envanteri. ilanlar/ ve detay sayfaları bunu server-side okur/filtreler.
+/**
+ * Tohumlama (seed) girdisi. DB'de `condition` ve `contactPreference` NOT NULL +
+ * DEFAULT olduğu için bu dosyada belirtilmez; seed.ts değerleri türetir.
+ */
+type SeedListing = Omit<Listing, "condition" | "contactPreference">;
+
+// Mock ilan envanteri. Yalnızca src/lib/db/seed.ts kullanır (npm run db:seed).
+// UYGULAMA KODUNDAN İMPORT ETMEYİN — istemci paketine ~1000 satır ölü veri girer.
 // Spec anahtarları lib/categories.ts içindeki specFields ile uyumludur.
 // Kategoriler 7 ana kategoriden oluşur; araçlar alt kategoridir.
 
-export const LISTINGS: Listing[] = [
+export const LISTINGS: SeedListing[] = [
   // ───────── Hafriyat — Ekskavatör ─────────
   {
     id: "l1",
@@ -724,12 +731,3 @@ export const LISTINGS: Listing[] = [
     photoCount: 2,
   },
 ];
-
-export function getListing(id: string): Listing | undefined {
-  return LISTINGS.find((l) => l.id === id);
-}
-
-/** Yalnızca yayında (aktif) ilanlar — vitrin/arama için */
-export function activeListings(): Listing[] {
-  return LISTINGS.filter((l) => l.status === "aktif");
-}

@@ -4,7 +4,7 @@ import { ShieldCheckIcon, CheckIcon } from "@/components/ui/icons";
 const POINTS = [
   "Binlerce iş makinesi ve ağır vasıta ilanı",
   "Operatörlü / operatörsüz, esnek kiralama süreleri",
-  "Doğrulanmış kurumsal satıcılar",
+  "Bireysel ve kurumsal satıcılar bir arada",
   "Tek hesapla hem kirala hem kiraya ver",
 ];
 

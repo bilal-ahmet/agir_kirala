@@ -5,6 +5,7 @@ import { getUser } from "@/lib/db/queries/users";
 import { reviewsForUser } from "@/lib/db/queries/reviews";
 import { ListingDetail } from "@/components/listing/ListingDetail";
 
+// getListingById React cache()'li: aşağıdaki sayfa aynı ilanı tekrar sorgulamaz.
 export async function generateMetadata({
   params,
 }: {

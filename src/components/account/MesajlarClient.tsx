@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import type { ConversationView } from "@/lib/db/queries/conversations";
 import { sendMessageAction } from "@/lib/actions/conversations";
+import type { Message } from "@/lib/types";
 import { timeAgo } from "@/lib/format";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -19,21 +20,45 @@ export function MesajlarClient({
   conversations: ConversationView[];
   currentUserId: string;
 }) {
-  const router = useRouter();
   const sp = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(sp.get("c"));
   const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
 
-  const selected = conversations.find((c) => c.id === selectedId) ?? null;
+  const base = conversations.find((c) => c.id === selectedId) ?? null;
+
+  // Gönderilen mesaj sunucu turunu beklemeden ekranda görünsün.
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic<Message[], Message>(
+    base?.messages ?? [],
+    (cur, m) => [...cur, m],
+  );
+  const selected = base ? { ...base, messages: optimisticMessages } : null;
+
+  // Yeni mesaj geldiğinde / sohbet değiştiğinde en alta kaydır.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [selectedId, optimisticMessages.length]);
 
   const send = () => {
-    if (!selected || !draft.trim()) return;
+    if (!base || !draft.trim()) return;
     const text = draft.trim();
     setDraft("");
+    setError(null);
     startTransition(async () => {
-      await sendMessageAction(selected.id, text);
-      router.refresh();
+      addOptimisticMessage({
+        id: `optimistic-${Date.now()}`,
+        senderId: currentUserId,
+        text,
+        createdAt: new Date().toISOString(),
+      });
+      const res = await sendMessageAction(base.id, text);
+      if (res.error) {
+        setError(res.error);
+        setDraft(text); // kaybolmasın
+      }
     });
   };
 
@@ -102,7 +127,7 @@ export function MesajlarClient({
                 </div>
               </div>
 
-              <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
+              <div ref={threadRef} className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
                 {selected.messages.map((m) => {
                   const mine = m.senderId === currentUserId;
                   return (
@@ -115,6 +140,12 @@ export function MesajlarClient({
                   );
                 })}
               </div>
+
+              {error && (
+                <p role="alert" className="border-t border-line px-3 pt-2 text-sm text-danger">
+                  {error}
+                </p>
+              )}
 
               <div className="flex items-end gap-2 border-t border-line p-3">
                 <Textarea

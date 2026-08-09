@@ -12,7 +12,8 @@ export function Logo({ className }: { className?: string }) {
           <circle cx="18" cy="18" r="1.6" />
         </svg>
       </span>
-      <span className="text-lg font-extrabold uppercase leading-none tracking-tight">
+      {/* leading-tight: "AĞIR"daki Ğ şapkası leading-none ile kırpılıyordu. */}
+      <span className="text-lg font-extrabold uppercase leading-tight tracking-tight">
         <span className="text-fg">AĞIR</span>
         <span className="text-accent">KİRALA</span>
       </span>

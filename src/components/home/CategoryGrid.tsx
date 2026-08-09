@@ -25,16 +25,16 @@ export async function CategoryGrid() {
             <Link
               key={c.slug}
               href={`/ilanlar?kategori=${c.slug}`}
-              className="group flex w-64 shrink-0 snap-start items-center gap-4 rounded-lg border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:bg-surface-2"
+              className="group flex w-64 shrink-0 snap-start flex-col justify-between gap-3 rounded-lg border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:bg-surface-2"
             >
-              <span className="text-4xl">{c.icon}</span>
               <span className="min-w-0">
-                <span className="block font-semibold leading-tight text-fg group-hover:text-accent">
+                <span className="block text-lg font-semibold leading-tight text-fg group-hover:text-accent">
                   {c.name}
                 </span>
-                <span className="mt-1 block text-xs text-faint">
-                  {count > 0 ? `${count} ilan` : "Yakında"}
-                </span>
+                <span className="mt-1.5 block text-xs leading-snug text-muted">{c.tagline}</span>
+              </span>
+              <span className="text-xs font-medium text-faint">
+                {count > 0 ? `${count} ilan` : "Yakında"}
               </span>
             </Link>
           );

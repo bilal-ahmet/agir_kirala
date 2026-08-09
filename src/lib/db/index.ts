@@ -23,6 +23,10 @@ if (process.env.NODE_ENV !== "production") {
   globalForDb.__pgClient = client;
 }
 
-export const db = drizzle(client, { schema, casing: "snake_case" });
+export const db = drizzle(client, {
+  schema,
+  casing: "snake_case",
+  logger: process.env.DB_LOG === "1",
+});
 
 export { schema };

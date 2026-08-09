@@ -60,13 +60,10 @@ export function Header() {
                     key={c.slug}
                     href={`/ilanlar?kategori=${c.slug}`}
                     onClick={() => setOpenMenu(null)}
-                    className="flex items-center gap-3 rounded-md px-3 py-2.5 hover:bg-surface-2"
+                    className="rounded-md px-3 py-2.5 hover:bg-surface-2"
                   >
-                    <span className="text-2xl">{c.icon}</span>
-                    <span>
-                      <span className="block text-sm font-semibold text-fg">{c.name}</span>
-                      <span className="block text-xs text-faint">{c.tagline}</span>
-                    </span>
+                    <span className="block text-sm font-semibold text-fg">{c.name}</span>
+                    <span className="block text-xs text-faint">{c.tagline}</span>
                   </Link>
                 ))}
               </div>

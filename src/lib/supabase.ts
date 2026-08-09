@@ -3,6 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const LISTING_PHOTOS_BUCKET = "listing-photos";
+export const LISTING_VIDEOS_BUCKET = "listing-videos";
 
 let cached: SupabaseClient | null = null;
 

@@ -6,13 +6,18 @@ import { CATEGORIES, getCategory, getFilterableSpecFields } from "@/lib/categori
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
+  CONDITIONS,
+  CONDITION_LABELS,
   FUEL_LABELS,
+  FUEL_TYPES,
   MAX_YEAR,
   MIN_YEAR,
+  NAKLIYE_LABELS,
+  OWNER_TYPES,
   OWNER_TYPE_LABELS,
   PERIODS,
+  TRANSPORT_FILTERS,
 } from "@/lib/constants";
-import type { FuelType, OwnerType } from "@/lib/types";
 import { Input, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
@@ -26,8 +31,17 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
   const il = sp.get("il") || "";
   const ilceler = districtsOf(il);
 
+  /** Virgüllü çoklu seçim parametresinde bir değer seçili mi. */
+  const has = (key: string, value: string) =>
+    (sp.get(key) || "").split(",").filter(Boolean).includes(value);
+
   return (
     <div className="divide-y divide-line">
+      {/* Kelime ile arama — filtrelerin en başında */}
+      <Section title="Kelime ile Ara">
+        <TextParamInput keyName="q" placeholder="Marka, model veya ilan başlığı" />
+      </Section>
+
       {/* Kategori */}
       <Section title="Kategori">
         <Select
@@ -51,30 +65,35 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
           ))}
         </Select>
 
-        {category && (
-          <Select
-            className="mt-2"
-            value={altKategori}
-            onChange={(e) =>
-              update((p) => {
-                const v = e.target.value;
-                if (v) p.set("altKategori", v);
-                else p.delete("altKategori");
-                p.delete("marka");
-              })
-            }
-          >
-            <option value="">Tüm Alt Kategoriler</option>
-            {category.subcategories.map((s) => (
-              <option key={s.slug} value={s.slug}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
+        {/* Alt kategori her zaman görünür; kategori seçilmeden kullanılamaz. */}
+        <Select
+          className="mt-2"
+          value={altKategori}
+          disabled={!category}
+          onChange={(e) =>
+            update((p) => {
+              const v = e.target.value;
+              if (v) p.set("altKategori", v);
+              else p.delete("altKategori");
+              p.delete("marka");
+            })
+          }
+        >
+          <option value="">{category ? "Tüm Alt Kategoriler" : "Önce kategori seçin"}</option>
+          {(category?.subcategories ?? []).map((s) => (
+            <option key={s.slug} value={s.slug}>
+              {s.name}
+            </option>
+          ))}
+        </Select>
+        {!category && (
+          <p className="mt-1 text-xs text-faint">
+            Alt kategori için önce bir kategori seçmelisiniz.
+          </p>
         )}
       </Section>
 
-      {/* Konum */}
+      {/* Konum — il ve ilçe birlikte görünür */}
       <Section title="Konum">
         <Select
           value={il}
@@ -94,20 +113,20 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
             </option>
           ))}
         </Select>
-        {il && ilceler.length > 0 && (
-          <Select
-            className="mt-2"
-            value={sp.get("ilce") || ""}
-            onChange={(e) => setParam("ilce", e.target.value)}
-          >
-            <option value="">Tüm İlçeler</option>
-            {ilceler.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </Select>
-        )}
+        <Select
+          className="mt-2"
+          value={sp.get("ilce") || ""}
+          disabled={!il || ilceler.length === 0}
+          onChange={(e) => setParam("ilce", e.target.value)}
+        >
+          <option value="">{il ? "Tüm İlçeler" : "Önce il seçin"}</option>
+          {ilceler.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </Select>
+        {!il && <p className="mt-1 text-xs text-faint">İlçe için önce bir il seçmelisiniz.</p>}
       </Section>
 
       {/* Fiyatlandırma */}
@@ -118,9 +137,21 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
           options={[{ value: "", label: "Hepsi" }, ...PERIODS.map((p) => ({ value: p.value, label: p.label }))]}
         />
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <RangeInput keyName="minFiyat" placeholder="Min ₺" />
-          <RangeInput keyName="maxFiyat" placeholder="Max ₺" />
+          <NumberInput keyName="minFiyat" placeholder="Min ₺" />
+          <NumberInput keyName="maxFiyat" placeholder="Max ₺" />
         </div>
+      </Section>
+
+      {/* Durum */}
+      <Section title="Durum">
+        {CONDITIONS.map((c) => (
+          <CheckRow
+            key={c}
+            label={CONDITION_LABELS[c]}
+            checked={has("durum", c)}
+            onChange={() => toggleInList("durum", c)}
+          />
+        ))}
       </Section>
 
       {/* Operatör */}
@@ -155,6 +186,20 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
         </div>
       </Section>
 
+      {/* Medya */}
+      <Section title="Medya">
+        <CheckRow
+          label="Fotoğraflı ilanlar"
+          checked={sp.get("fotografli") === "1"}
+          onChange={() => setParam("fotografli", sp.get("fotografli") === "1" ? "" : "1")}
+        />
+        <CheckRow
+          label="Videolu ilanlar"
+          checked={sp.get("videolu") === "1"}
+          onChange={() => setParam("videolu", sp.get("videolu") === "1" ? "" : "1")}
+        />
+      </Section>
+
       {/* Kategoriye özel teknik filtreler */}
       {category && getFilterableSpecFields(kategori).length > 0 && (
         <Section title="Teknik Özellikler" collapsible={collapsibleAdvanced}>
@@ -170,7 +215,7 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
                   value={String(sp.get(`spec_${field.key}`) || "")}
                   onChange={(e) => setParam(`spec_${field.key}`, e.target.value)}
                 >
-                  <option value="">Hepsi</option>
+                  <option value="">Seçiniz</option>
                   {field.type === "number"
                     ? (field.steps ?? []).map((s) => (
                         <option key={s} value={s}>
@@ -192,49 +237,45 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
       {/* Model yılı */}
       <Section title="Model Yılı" collapsible={collapsibleAdvanced}>
         <div className="grid grid-cols-2 gap-2">
-          <RangeInput keyName="minYil" placeholder={`En eski (${MIN_YEAR})`} type="number" />
-          <RangeInput keyName="maxYil" placeholder={`En yeni (${MAX_YEAR})`} type="number" />
+          <NumberInput keyName="minYil" placeholder={`En eski (${MIN_YEAR})`} maxLength={4} />
+          <NumberInput keyName="maxYil" placeholder={`En yeni (${MAX_YEAR})`} maxLength={4} />
         </div>
       </Section>
 
-      {/* Nakliye — tek sabit politika */}
-      <Section title="Nakliye / Teslimat" collapsible={collapsibleAdvanced}>
-        <Select value="yok" disabled>
-          <option value="yok">Nakliye Yok (Müşteri Alır)</option>
-        </Select>
+      {/* Nakliye */}
+      <Section title="Nakliye" collapsible={collapsibleAdvanced}>
+        {TRANSPORT_FILTERS.map((t) => (
+          <CheckRow
+            key={t}
+            label={NAKLIYE_LABELS[t]}
+            checked={has("nakliye", t)}
+            onChange={() => toggleInList("nakliye", t)}
+          />
+        ))}
       </Section>
 
       {/* Yakıt */}
       <Section title="Yakıt Tipi" collapsible={collapsibleAdvanced}>
-        <Select value={sp.get("yakit") || ""} onChange={(e) => setParam("yakit", e.target.value)}>
-          <option value="">Farketmez</option>
-          {(["dizel", "elektrik", "lpg", "benzin", "hibrit"] as FuelType[]).map((f) => (
-            <option key={f} value={f}>
-              {FUEL_LABELS[f]}
-            </option>
-          ))}
-        </Select>
+        {FUEL_TYPES.map((f) => (
+          <CheckRow
+            key={f}
+            label={FUEL_LABELS[f]}
+            checked={has("yakit", f)}
+            onChange={() => toggleInList("yakit", f)}
+          />
+        ))}
       </Section>
 
       {/* Satıcı */}
       <Section title="Satıcı" collapsible={collapsibleAdvanced}>
-        <Segmented
-          value={sp.get("saticiTipi") || ""}
-          onChange={(v) => setParam("saticiTipi", v)}
-          options={[
-            { value: "", label: "Hepsi" },
-            ...(["bireysel", "kurumsal"] as OwnerType[]).map((t) => ({
-              value: t,
-              label: OWNER_TYPE_LABELS[t],
-            })),
-          ]}
-        />
-        <CheckRow
-          className="mt-3"
-          label="Sadece doğrulanmış satıcılar"
-          checked={sp.get("dogrulanmis") === "1"}
-          onChange={() => setParam("dogrulanmis", sp.get("dogrulanmis") === "1" ? "" : "1")}
-        />
+        {OWNER_TYPES.map((t) => (
+          <CheckRow
+            key={t}
+            label={OWNER_TYPE_LABELS[t]}
+            checked={has("saticiTipi", t)}
+            onChange={() => toggleInList("saticiTipi", t)}
+          />
+        ))}
       </Section>
     </div>
   );
@@ -357,27 +398,63 @@ function CheckRow({
   );
 }
 
-function RangeInput({
-  keyName,
-  placeholder,
-  type = "number",
-}: {
-  keyName: string;
-  placeholder: string;
-  type?: string;
-}) {
+/** Serbest metin parametresi (arama kutusu). Blur veya Enter'da URL'e yazar. */
+function TextParamInput({ keyName, placeholder }: { keyName: string; placeholder: string }) {
   const { sp, setParam } = useFilterController();
   const current = sp.get(keyName) || "";
   return (
     <Input
       key={current}
-      type={type}
-      inputMode="numeric"
+      type="search"
       defaultValue={current}
       placeholder={placeholder}
       onBlur={(e) => {
-        if (e.target.value !== current) setParam(keyName, e.target.value);
+        const v = e.target.value.trim();
+        if (v !== current) setParam(keyName, v);
       }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+    />
+  );
+}
+
+/**
+ * Sayısal aralık kutusu. `type="number"` KULLANILMAZ: artırma/azaltma okları
+ * istenmiyor ve alan eksiye düşmemeli. Girdi yalnızca rakamlara indirgenir.
+ */
+function NumberInput({
+  keyName,
+  placeholder,
+  maxLength,
+}: {
+  keyName: string;
+  placeholder: string;
+  maxLength?: number;
+}) {
+  const { sp, setParam } = useFilterController();
+  const current = sp.get(keyName) || "";
+
+  const commit = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    if (digits !== current) setParam(keyName, digits);
+  };
+
+  return (
+    <Input
+      key={current}
+      type="text"
+      inputMode="numeric"
+      maxLength={maxLength}
+      defaultValue={current}
+      placeholder={placeholder}
+      onInput={(e) => {
+        // Yazarken harf/işaret girilmesini engelle (eksi dahil).
+        const el = e.currentTarget;
+        const cleaned = el.value.replace(/\D/g, "");
+        if (el.value !== cleaned) el.value = cleaned;
+      }}
+      onBlur={(e) => commit(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}

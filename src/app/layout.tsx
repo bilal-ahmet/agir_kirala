@@ -4,8 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
-import { getCurrentUser } from "@/lib/auth/session";
-import { favoriteIds } from "@/lib/db/queries/favorites";
+import { getSessionContext } from "@/lib/auth/session";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,8 +44,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await getCurrentUser();
-  const favIds = user ? await favoriteIds(user.id) : [];
+  // Tek sorgu: oturum kullanıcısı + favori id'leri (bkz. getSessionContext).
+  const { user, favoriteIds: favIds } = await getSessionContext();
 
   return (
     <html

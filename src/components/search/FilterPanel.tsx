@@ -2,7 +2,7 @@
 
 import { FilterControls } from "./FilterControls";
 import { useFilterController } from "./filter-controller";
-import { parseFilters, activeFilterCount } from "@/lib/filters";
+import { parseFilters, activeFilterCount } from "@/lib/filter-params";
 
 /** Filtre kabuğu (başlık + temizle + kontroller). Sidebar ve mobil sheet'te kullanılır. */
 export function FilterPanel({ collapsibleAdvanced = false }: { collapsibleAdvanced?: boolean } = {}) {

@@ -1,11 +1,32 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, inArray, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { cache } from "react";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "../index";
 import { listingPhotos, listings, users } from "../schema";
 import type { ListingPhotoRow, ListingRow } from "../schema";
-import { RESULTS_PER_PAGE } from "../../constants";
-import type { FilterState, Listing, RentalPeriod, SortKey } from "../../types";
+import { RESULTS_PER_PAGE, TRANSPORT_VAR_VALUES } from "../../constants";
+import type {
+  FilterState,
+  Listing,
+  RentalPeriod,
+  SortKey,
+  TransportOption,
+} from "../../types";
 import { toListing } from "./mappers";
 
 /** İlgili fiyat (₺) SQL ifadesi: periyot seçiliyse o periyot, değilse primaryPrice sırası. */
@@ -52,11 +73,30 @@ function buildConditions(f: FilterState): SQL[] {
   if (f.operator === "operatorlu") c.push(eq(listings.operator, true));
   if (f.operator === "operatorsuz") c.push(eq(listings.operator, false));
 
-  if (f.nakliye) c.push(eq(listings.transport, f.nakliye));
-  if (f.yakit) c.push(eq(listings.fuel, f.yakit));
+  // Nakliye: "var" → dahil|ekstra, "yok" → yok. İkisi de seçiliyse koşul yok.
+  if (f.nakliye?.length) {
+    const allowed = f.nakliye.flatMap((n) =>
+      n === "var" ? TRANSPORT_VAR_VALUES : (["yok"] as TransportOption[]),
+    );
+    if (allowed.length < 3) c.push(inArray(listings.transport, allowed));
+  }
 
-  if (f.saticiTipi) c.push(eq(users.type, f.saticiTipi));
-  if (f.dogrulanmis) c.push(eq(users.verified, true));
+  if (f.yakit?.length) c.push(inArray(listings.fuel, f.yakit));
+  if (f.durum?.length) c.push(inArray(listings.condition, f.durum));
+  if (f.saticiTipi?.length) c.push(inArray(users.type, f.saticiTipi));
+
+  // Medya filtreleri.
+  if (f.fotografli) {
+    c.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(listingPhotos)
+          .where(eq(listingPhotos.listingId, listings.id)),
+      ),
+    );
+  }
+  if (f.videolu) c.push(isNotNull(listings.videoUrl));
 
   if (f.specs) {
     for (const [key, cond] of Object.entries(f.specs)) {
@@ -139,28 +179,42 @@ export async function searchListings(f: FilterState): Promise<SearchResult> {
   const conditions = buildConditions(f);
   const where = and(...conditions);
 
-  const [{ total }] = await db
-    .select({ total: sql<number>`count(*)::int` })
-    .from(listings)
-    .innerJoin(users, eq(listings.ownerId, users.id))
-    .where(where);
+  // Sayım ve sayfa sorgusu birbirine bağlı değil → paralel çalıştır.
+  const requestedPage = Math.max(f.sayfa ?? 1, 1);
+  const [countRows, rows] = await Promise.all([
+    db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(listings)
+      .innerJoin(users, eq(listings.ownerId, users.id))
+      .where(where),
+    db
+      .select({ listing: listings, ownerVerified: users.verified, ownerRating: users.rating })
+      .from(listings)
+      .innerJoin(users, eq(listings.ownerId, users.id))
+      .where(where)
+      .orderBy(...buildOrderBy(f.sirala ?? "onerilen", f.periyot))
+      .limit(RESULTS_PER_PAGE)
+      .offset((requestedPage - 1) * RESULTS_PER_PAGE),
+  ]);
 
+  const total = countRows[0].total;
   const totalPages = Math.max(1, Math.ceil(total / RESULTS_PER_PAGE));
-  const page = Math.min(Math.max(f.sayfa ?? 1, 1), totalPages);
-  const offset = (page - 1) * RESULTS_PER_PAGE;
+  // İstenen sayfa aralık dışındaysa son sayfaya çekilir; o durumda sayfayı yeniden çek.
+  const page = Math.min(requestedPage, totalPages);
+  const pageRows =
+    page === requestedPage
+      ? rows
+      : await db
+          .select({ listing: listings, ownerVerified: users.verified, ownerRating: users.rating })
+          .from(listings)
+          .innerJoin(users, eq(listings.ownerId, users.id))
+          .where(where)
+          .orderBy(...buildOrderBy(f.sirala ?? "onerilen", f.periyot))
+          .limit(RESULTS_PER_PAGE)
+          .offset((page - 1) * RESULTS_PER_PAGE);
 
-  const rows = await db
-    .select({ listing: listings, ownerVerified: users.verified, ownerRating: users.rating })
-    .from(listings)
-    .innerJoin(users, eq(listings.ownerId, users.id))
-    .where(where)
-    .orderBy(...buildOrderBy(f.sirala ?? "onerilen", f.periyot))
-    .limit(RESULTS_PER_PAGE)
-    .offset(offset);
-
-  const listingRows = rows.map((r) => r.listing);
-  const photoMap = await photosByListing(listingRows.map((l) => l.id));
-  const results = rows.map((r) =>
+  const photoMap = await photosByListing(pageRows.map((r) => r.listing.id));
+  const results = pageRows.map((r) =>
     toListing(r.listing, photoMap.get(r.listing.id) ?? [], {
       verified: r.ownerVerified,
       rating: r.ownerRating,
@@ -172,8 +226,12 @@ export async function searchListings(f: FilterState): Promise<SearchResult> {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Tek ilan (foto ile). Geçersiz uuid'de undefined döner. */
-export async function getListingById(id: string): Promise<Listing | undefined> {
+/**
+ * Tek ilan (foto ile). Geçersiz uuid'de undefined döner.
+ * React cache() ile sarılı: detay sayfasında hem generateMetadata hem page aynı
+ * ilanı istiyor; bu sayede sorgu istek başına bir kez çalışır.
+ */
+export const getListingById = cache(async (id: string): Promise<Listing | undefined> => {
   if (!UUID_RE.test(id)) return undefined;
   const row = await db.query.listings.findFirst({ where: eq(listings.id, id) });
   if (!row) return undefined;
@@ -182,7 +240,7 @@ export async function getListingById(id: string): Promise<Listing | undefined> {
     ownersByIds([row.ownerId]),
   ]);
   return toListing(row, photos, ownerMap.get(row.ownerId));
-}
+});
 
 /** Eskiden yerel/tohum ayrımı vardı; artık tek kaynak. */
 export const findAnyListing = getListingById;
@@ -206,14 +264,14 @@ export async function categoryCounts(): Promise<Record<string, number>> {
   return Object.fromEntries(rows.map((r) => [r.slug, r.total]));
 }
 
-/** Toplam aktif ilan sayısı. */
-export async function countActiveListings(): Promise<number> {
+/** Toplam aktif ilan sayısı. Ana sayfa hem Hero'da hem gövdede istediği için cache'li. */
+export const countActiveListings = cache(async (): Promise<number> => {
   const [{ total }] = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(listings)
     .where(eq(listings.status, "aktif"));
   return total;
-}
+});
 
 /** Aktif ilanlar (ana sayfa gridini doldurmak için). */
 export async function activeListings(limit = 60): Promise<Listing[]> {
@@ -250,6 +308,16 @@ export async function similarListings(listing: Listing, limit = 4): Promise<List
       ),
     )
     .limit(limit);
+  return hydrate(rows);
+}
+
+/** Bir satıcının yayındaki ilanları (satıcı profil sayfası). */
+export async function activeListingsByOwner(ownerId: string): Promise<Listing[]> {
+  const rows = await db
+    .select()
+    .from(listings)
+    .where(and(eq(listings.ownerId, ownerId), eq(listings.status, "aktif")))
+    .orderBy(desc(listings.featured), desc(listings.createdAt));
   return hydrate(rows);
 }
 

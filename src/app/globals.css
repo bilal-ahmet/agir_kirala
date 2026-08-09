@@ -127,10 +127,13 @@
     letter-spacing: -0.01em;
   }
 
-  /* Koyu tema kaydırma çubuğu */
+  /*
+    Kaydırma çubuğu — bilinçli olarak kalın. Uzun seçim listelerinde (il/ilçe,
+    marka, filtre kenar çubuğu) tutması kolay olsun diye 14px.
+  */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 14px;
+    height: 14px;
   }
   ::-webkit-scrollbar-track {
     background: var(--color-base);
@@ -138,10 +141,30 @@
   ::-webkit-scrollbar-thumb {
     background: var(--color-surface-3);
     border-radius: 999px;
-    border: 2px solid var(--color-base);
+    border: 3px solid var(--color-base);
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--color-line-strong);
+  }
+
+  /* Firefox karşılığı (::-webkit-* desteklemez) */
+  html {
+    scrollbar-width: auto;
+    scrollbar-color: var(--color-surface-3) var(--color-base);
+  }
+
+  /*
+    Sayı alanlarında artırma/azaltma okları kapalı — kullanıcı değeri elle yazar
+    ve alanlar (model yılı, fiyat) yanlışlıkla eksiye düşmez.
+  */
+  input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 }
 

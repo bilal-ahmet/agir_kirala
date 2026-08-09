@@ -1,26 +1,35 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { useAuth } from "@/context/auth-context";
 import { createListingAction, type CreateListingInput } from "@/lib/actions/listings";
 import { uploadListingPhotosAction } from "@/lib/actions/photos";
+import { uploadListingVideoAction } from "@/lib/actions/videos";
 import { CATEGORIES, getCategory } from "@/lib/categories";
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
+  ALLOWED_VIDEO_TYPES,
+  CONDITIONS,
+  CONDITION_LABELS,
   FUEL_LABELS,
   LISTING_PERIODS,
+  MAX_VIDEO_BYTES,
   MAX_YEAR,
   MIN_YEAR,
 } from "@/lib/constants";
 import type {
   Availability,
+  ContactPreference,
   FuelType,
   Listing,
+  ListingCondition,
   ListingStatus,
   PriceMap,
   RentalPeriod,
+  TransportOption,
 } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Label, Select, Textarea } from "@/components/ui/Field";
@@ -45,7 +54,10 @@ interface FormState {
   district: string;
   description: string;
   operator: boolean;
+  transport: TransportOption;
   fuel: FuelType;
+  condition: ListingCondition;
+  contactPreference: ContactPreference;
   usage: string;
   specs: Record<string, SpecVal>;
   availability: Availability;
@@ -64,6 +76,11 @@ export default function IlanEklePage() {
   const [pending, startTransition] = useTransition();
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const photoPreviews = useMemo(() => photoFiles.map((f) => URL.createObjectURL(f)), [photoFiles]);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const videoPreview = useMemo(
+    () => (videoFile ? URL.createObjectURL(videoFile) : null),
+    [videoFile],
+  );
 
   const [form, setForm] = useState<FormState>({
     categorySlug: "",
@@ -76,7 +93,10 @@ export default function IlanEklePage() {
     district: "",
     description: "",
     operator: false,
+    transport: "yok",
     fuel: "dizel",
+    condition: "ikinci_el",
+    contactPreference: "telefon_mesaj",
     usage: "",
     specs: {},
     availability: { weekdays: [] },
@@ -109,6 +129,12 @@ export default function IlanEklePage() {
     return out;
   }, [form.specs, category]);
 
+  // Profilinde telefon olmayan kullanıcı telefonlu iletişim seçemez.
+  const hasPhone = !!user?.phone?.trim();
+  const effectiveContactPreference: ContactPreference = hasPhone
+    ? form.contactPreference
+    : "sadece_mesaj";
+
   const hasAvailability =
     form.availability.weekdays.length > 0 ||
     !!form.availability.startTime ||
@@ -128,8 +154,10 @@ export default function IlanEklePage() {
     district: form.district || "",
     prices: parsedPrices,
     operator: form.operator,
-    transport: "yok",
+    transport: form.transport,
     fuel: form.fuel,
+    condition: form.condition,
+    contactPreference: effectiveContactPreference,
     usage: Number(form.usage) || 0,
     specs: parsedSpecs,
     description: form.description,
@@ -138,6 +166,7 @@ export default function IlanEklePage() {
     createdAt: new Date().toISOString(),
     photoSeed: seed,
     photoCount: 3,
+    ...(videoPreview ? { videoUrl: videoPreview } : {}),
     ...(hasAvailability ? { availability: form.availability } : {}),
   };
 
@@ -201,7 +230,10 @@ export default function IlanEklePage() {
     district: form.district,
     prices: parsedPrices,
     operator: form.operator,
+    transport: form.transport,
     fuel: form.fuel,
+    condition: form.condition,
+    contactPreference: effectiveContactPreference,
     usage: Number(form.usage) || 0,
     specs: parsedSpecs,
     description: form.description,
@@ -217,16 +249,24 @@ export default function IlanEklePage() {
         setError(res.error ?? "İlan oluşturulamadı.");
         return;
       }
-      // İlan oluşturuldu → seçilen görselleri yükle.
-      // Görseller tek tek gönderilir: tek bir server action isteği bodySizeLimit'i aşmasın.
+      // İlan oluşturuldu → seçilen medyayı yükle.
+      // Dosyalar tek tek gönderilir: tek bir server action isteği bodySizeLimit'i aşmasın.
+      const uploadWarnings: string[] = [];
       for (const f of photoFiles) {
         const fd = new FormData();
         fd.append("photos", f);
         const up = await uploadListingPhotosAction(res.id, fd);
-        if (up.error) {
-          // İlan kaydedildi ama görsel yüklenemedi — kullanıcıyı bilgilendir, yine de yönlendir.
-          console.warn(up.error);
-        }
+        if (up.error) uploadWarnings.push(up.error);
+      }
+      if (videoFile) {
+        const fd = new FormData();
+        fd.append("video", videoFile);
+        const up = await uploadListingVideoAction(res.id, fd);
+        if (up.error) uploadWarnings.push(up.error);
+      }
+      if (uploadWarnings.length) {
+        // İlan kaydedildi ama medya yüklenemedi — ilanlarım sayfasından tekrar denenebilir.
+        console.warn(uploadWarnings.join(" · "));
       }
       router.push(status === "taslak" ? "/hesap/ilanlarim?durum=taslak" : "/hesap/ilanlarim");
     });
@@ -432,9 +472,24 @@ export default function IlanEklePage() {
                   <option value="1">Operatörlü</option>
                 </Select>
               </Field>
-              <Field label="Nakliye">
-                <Select value="yok" disabled>
+              <Field label="Nakliye" hint="Makineyi siz mi taşıyorsunuz?">
+                <Select
+                  value={form.transport}
+                  onChange={(e) => set({ transport: e.target.value as TransportOption })}
+                >
                   <option value="yok">Nakliye Yok (Müşteriye Ait)</option>
+                  <option value="dahil">Nakliye Var — Fiyata Dahil</option>
+                  <option value="ekstra">Nakliye Var — Ayrıca Ücretli</option>
+                </Select>
+              </Field>
+              <Field label="Durum" required>
+                <Select
+                  value={form.condition}
+                  onChange={(e) => set({ condition: e.target.value as ListingCondition })}
+                >
+                  {CONDITIONS.map((c) => (
+                    <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
+                  ))}
                 </Select>
               </Field>
               <Field label="Yakıt">
@@ -568,6 +623,73 @@ export default function IlanEklePage() {
                     />
                   ))}
                 </div>
+              )}
+            </div>
+
+            <div>
+              <Label>Tanıtım Videosu</Label>
+              <p className="mb-2 -mt-1 text-xs text-faint">
+                MP4/WebM/MOV, tek video · en fazla{" "}
+                {Math.floor(MAX_VIDEO_BYTES / (1024 * 1024))} MB. İsteğe bağlı — videolu
+                ilanlar listede &quot;Videolu&quot; rozetiyle öne çıkar.
+              </p>
+              <input
+                type="file"
+                accept={ALLOWED_VIDEO_TYPES.join(",")}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  if (f && f.size > MAX_VIDEO_BYTES) {
+                    setError(
+                      `Video en fazla ${Math.floor(MAX_VIDEO_BYTES / (1024 * 1024))} MB olabilir. Seçtiğiniz dosya ${(f.size / (1024 * 1024)).toFixed(1)} MB.`,
+                    );
+                    e.target.value = "";
+                    setVideoFile(null);
+                    return;
+                  }
+                  setVideoFile(f);
+                  setError(null);
+                }}
+                className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-accent-fg hover:file:bg-accent-hover"
+              />
+              {videoPreview && (
+                <div className="mt-3 max-w-sm space-y-2">
+                  <video
+                    src={videoPreview}
+                    controls
+                    preload="metadata"
+                    playsInline
+                    className="aspect-video w-full rounded-md bg-black"
+                  />
+                  <Button variant="ghost" size="sm" onClick={() => setVideoFile(null)}>
+                    Videoyu kaldır
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label required>İletişim Tercihi</Label>
+              <p className="mb-2 -mt-1 text-xs text-faint">
+                Telefonunuzu paylaşmak istemiyorsanız yalnızca site üzerinden mesaj alabilirsiniz.
+              </p>
+              <Select
+                value={effectiveContactPreference}
+                disabled={!hasPhone}
+                onChange={(e) =>
+                  set({ contactPreference: e.target.value as ContactPreference })
+                }
+              >
+                <option value="telefon_mesaj">Telefon + WhatsApp + Site içi mesaj</option>
+                <option value="sadece_mesaj">Sadece site üzerinden mesaj</option>
+              </Select>
+              {!hasPhone && (
+                <p className="mt-1 text-xs text-warning">
+                  Profilinizde telefon numarası yok, bu yüzden ilan yalnızca site içi mesajla
+                  iletişim kuracak.{" "}
+                  <Link href="/hesap/profil" className="font-semibold text-accent hover:underline">
+                    Profilime telefon ekle
+                  </Link>
+                </p>
               )}
             </div>
 

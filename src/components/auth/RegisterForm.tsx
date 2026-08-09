@@ -7,7 +7,7 @@ import { registerAction, type AuthState } from "@/lib/auth/actions";
 import type { OwnerType } from "@/lib/types";
 import { PROVINCE_NAMES } from "@/lib/locations";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select } from "@/components/ui/Field";
+import { Field, Input, PasswordInput, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
 export function RegisterForm() {
@@ -15,6 +15,8 @@ export function RegisterForm() {
   const next = sp.get("next") || "/hesap";
   const [type, setType] = useState<OwnerType>("bireysel");
   const [state, formAction, pending] = useActionState<AuthState, FormData>(registerAction, {});
+  const fieldErrors = state.fieldErrors ?? {};
+  const errorList = Object.values(fieldErrors);
 
   return (
     <div className="w-full max-w-md">
@@ -40,35 +42,90 @@ export function RegisterForm() {
         ))}
       </div>
 
-      <form action={formAction} className="space-y-3">
+      <p className="mb-3 text-xs text-faint">
+        <span className="font-semibold text-danger">*</span> işaretli alanlar zorunludur.
+      </p>
+
+      {/* Tüm doğrulama hataları tek seferde, birlikte. */}
+      {errorList.length > 0 && (
+        <div
+          role="alert"
+          className="mb-3 rounded-md border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-danger"
+        >
+          <p className="font-semibold">Lütfen aşağıdaki {errorList.length} alanı düzeltin:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {errorList.map((msg) => (
+              <li key={msg}>{msg}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {state.error && errorList.length === 0 && (
+        <p role="alert" className="mb-3 rounded-md border border-danger/40 bg-danger-soft px-3 py-2.5 text-sm text-danger">
+          {state.error}
+        </p>
+      )}
+
+      {/*
+        noValidate: tarayıcının yerleşik doğrulaması ilk hatalı alanda durup
+        "lütfen bu alanı doldurun" gösteriyordu. Doğrulama sunucuda yapılır ve
+        TÜM hatalar birlikte döner.
+      */}
+      <form action={formAction} className="space-y-3" noValidate>
         <input type="hidden" name="next" value={next} />
         <input type="hidden" name="type" value={type} />
 
-        <Field label={type === "kurumsal" ? "Yetkili Ad Soyad" : "Ad Soyad"}>
-          <Input name="name" placeholder="Ad Soyad" required />
+        <Field
+          label={type === "kurumsal" ? "Yetkili Ad Soyad" : "Ad Soyad"}
+          required
+          error={fieldErrors.name}
+        >
+          <Input name="name" placeholder="Ad Soyad" aria-invalid={!!fieldErrors.name} />
         </Field>
 
         {type === "kurumsal" && (
-          <Field label="Firma Adı">
-            <Input name="companyName" placeholder="Firma Ünvanı" required />
+          <Field label="Firma Adı" required error={fieldErrors.companyName}>
+            <Input
+              name="companyName"
+              placeholder="Firma Ünvanı"
+              aria-invalid={!!fieldErrors.companyName}
+            />
           </Field>
         )}
 
-        <Field label="E-posta">
-          <Input type="email" name="email" placeholder="ornek@eposta.com" required />
+        <Field label="E-posta" required error={fieldErrors.email}>
+          <Input
+            type="email"
+            name="email"
+            placeholder="ornek@eposta.com"
+            aria-invalid={!!fieldErrors.email}
+          />
         </Field>
 
-        <Field label="Şifre" hint="En az 6 karakter.">
-          <Input type="password" name="password" placeholder="••••••••" autoComplete="new-password" required />
+        <Field label="Şifre" required hint="En az 6 karakter." error={fieldErrors.password}>
+          <PasswordInput
+            name="password"
+            placeholder="••••••••"
+            autoComplete="new-password"
+            aria-invalid={!!fieldErrors.password}
+          />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Telefon">
-            <Input name="phone" placeholder="05XX XXX XX XX" required />
+          <Field
+            label="Telefon"
+            hint="İsteğe bağlı."
+            error={fieldErrors.phone}
+          >
+            <Input
+              name="phone"
+              placeholder="05XX XXX XX XX"
+              aria-invalid={!!fieldErrors.phone}
+            />
           </Field>
-          <Field label="Şehir">
-            <Select name="city" defaultValue="">
-              <option value="">Seçin</option>
+          <Field label="Şehir" required error={fieldErrors.city}>
+            <Select name="city" defaultValue="" aria-invalid={!!fieldErrors.city}>
+              <option value="">Seçiniz</option>
               {PROVINCE_NAMES.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
@@ -76,9 +133,13 @@ export function RegisterForm() {
           </Field>
         </div>
 
-        {state.error && <p className="text-sm text-danger">{state.error}</p>}
+        <p className="text-xs text-faint">
+          Telefonunuzu girmeseniz de kayıt olabilirsiniz; bu durumda ilanlarınızda yalnızca
+          site üzerinden mesajla iletişim kurulur.
+        </p>
+
         <Button type="submit" className="w-full" size="lg" disabled={pending}>
-          Hesap Oluştur
+          {pending ? "Hesap oluşturuluyor…" : "Hesap Oluştur"}
         </Button>
         <p className="text-center text-xs text-faint">
           Kayıt olarak Kullanım Şartları ve Gizlilik Politikası&apos;nı kabul etmiş olursunuz.
