@@ -17,11 +17,12 @@ export async function Hero() {
             {total}+ aktif ilan · Operatörlü & operatörsüz
           </span>
           {/*
-            leading-[1.15]: Türkçe büyük harflerde İ'nin noktası ve Ğ'nin şapkası
-            cap-height'ın üstüne çıkıyor. Daha dar satır yüksekliğinde (1.05)
-            "KİRALAMA" bir üstteki "İŞ" ile çakışıyordu.
+            leading-[1.4] — canvas measureText ile ölçüldü (Oswald 700, uppercase TR):
+            üst satırdaki Ş'nin çengeli taban çizgisinin 0.283em altına, alt
+            satırdaki İ'nin noktası 1.05em üstüne çıkıyor. Çakışmamak için satır
+            aralığı en az 1.333em olmalı; 1.4 pay bırakır. (1.05 ve 1.15 çakışıyordu.)
           */}
-          <h1 className="mt-5 text-4xl font-bold uppercase leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">
+          <h1 className="mt-5 text-4xl font-bold uppercase leading-[1.4] tracking-tight sm:text-5xl lg:text-6xl">
             İş Makinesi ve <span className="text-accent">Ağır Vasıta</span> Kiralama
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-muted">

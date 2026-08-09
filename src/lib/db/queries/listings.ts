@@ -29,10 +29,22 @@ import type {
 } from "../../types";
 import { toListing } from "./mappers";
 
-/** İlgili fiyat (₺) SQL ifadesi: periyot seçiliyse o periyot, değilse primaryPrice sırası. */
-function relevantPriceExpr(period?: RentalPeriod): SQL {
-  if (period) return sql`(${listings.prices}->>${period})::numeric`;
-  // primaryPrice sırası: gunluk > saatlik > haftalik > aylik > yillik (format.ts ile aynı).
+/**
+ * İlgili fiyat (₺) SQL ifadesi.
+ * - Tek periyot seçili → o periyodun fiyatı
+ * - Birden çok periyot seçili → seçilenler arasındaki EN DÜŞÜK fiyat
+ *   (LEAST NULL'ları yok sayar), böylece "min/max fiyat" seçilen periyotların
+ *   herhangi birinde tutan ilanları getirir
+ * - Hiç seçili değil → primaryPrice sırası (format.ts ile aynı)
+ */
+function relevantPriceExpr(periods?: RentalPeriod[]): SQL {
+  if (periods?.length === 1) {
+    return sql`(${listings.prices}->>${periods[0]})::numeric`;
+  }
+  if (periods && periods.length > 1) {
+    const parts = periods.map((p) => sql`(${listings.prices}->>${p})::numeric`);
+    return sql`least(${sql.join(parts, sql`, `)})`;
+  }
   return sql`coalesce(
     ${listings.prices}->>'gunluk',
     ${listings.prices}->>'saatlik',
@@ -61,7 +73,16 @@ function buildConditions(f: FilterState): SQL[] {
   if (f.marka?.length) c.push(inArray(listings.brand, f.marka));
   if (f.il) c.push(eq(listings.city, f.il));
   if (f.ilce) c.push(eq(listings.district, f.ilce));
-  if (f.periyot) c.push(sql`jsonb_exists(${listings.prices}, ${f.periyot})`);
+  // Seçilen periyotlardan EN AZ BİRİNİ sunan ilanlar.
+  // `?|` operatörü yerine fonksiyon formu (sürücünün `?` placeholder'ıyla çakışmasın).
+  // Dizi elemanları TEK TEK parametrelenir; drizzle bir JS dizisini tek parametreye
+  // düzleştirip "malformed array literal" hatası veriyor.
+  if (f.periyot?.length) {
+    const items = f.periyot.map((p) => sql`${p}`);
+    c.push(
+      sql`jsonb_exists_any(${listings.prices}, array[${sql.join(items, sql`, `)}]::text[])`,
+    );
+  }
 
   const price = relevantPriceExpr(f.periyot);
   if (f.minFiyat != null) c.push(sql`${price} >= ${f.minFiyat}`);
@@ -112,9 +133,9 @@ function buildConditions(f: FilterState): SQL[] {
   return c;
 }
 
-/** SortKey → ORDER BY ifadeleri (filters.ts sortListings ile eşdeğer). */
-function buildOrderBy(sort: SortKey, period?: RentalPeriod): SQL[] {
-  const price = relevantPriceExpr(period);
+/** SortKey → ORDER BY ifadeleri. Fiyat sıralaması seçili periyotlara göre yapılır. */
+function buildOrderBy(sort: SortKey, periods?: RentalPeriod[]): SQL[] {
+  const price = relevantPriceExpr(periods);
   switch (sort) {
     case "yeni":
       return [desc(listings.createdAt)];

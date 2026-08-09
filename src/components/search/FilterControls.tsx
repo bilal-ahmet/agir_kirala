@@ -133,15 +133,21 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
 
       {/* Fiyatlandırma */}
       <Section title="Fiyatlandırma">
-        <Segmented
-          value={sp.get("periyot") || ""}
-          onChange={(v) => setParam("periyot", v)}
-          options={[{ value: "", label: "Hepsi" }, ...PERIODS.map((p) => ({ value: p.value, label: p.label }))]}
-        />
+        {PERIODS.map((p) => (
+          <CheckRow
+            key={p.value}
+            label={p.label}
+            checked={has("periyot", p.value)}
+            onChange={() => toggleInList("periyot", p.value)}
+          />
+        ))}
         <div className="mt-3 grid grid-cols-2 gap-2">
           <NumberInput keyName="minFiyat" placeholder="Min ₺" />
           <NumberInput keyName="maxFiyat" placeholder="Max ₺" />
         </div>
+        <p className="mt-1.5 text-xs text-faint">
+          Birden çok periyot seçerseniz fiyat aralığı en düşük olana göre uygulanır.
+        </p>
       </Section>
 
       {/* Durum */}
@@ -333,35 +339,6 @@ function Section({
   );
 }
 
-function Segmented({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-            value === o.value
-              ? "border-accent bg-accent-soft text-accent"
-              : "border-line text-muted hover:border-line-strong hover:text-fg",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function CheckRow({
   label,
   checked,
@@ -376,10 +353,28 @@ function CheckRow({
   badge?: React.ReactNode;
 }) {
   return (
-    <label className={cn("flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1.5 text-sm text-muted hover:text-fg", className)}>
+    <label
+      className={cn(
+        "relative flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1.5 text-sm text-muted hover:text-fg",
+        className,
+      )}
+    >
+      {/*
+        Girdi görünmez ama satırın TAMAMINI kaplar ve akışta yerinde durur.
+        Eskiden `sr-only` idi: position:absolute + 1x1px olduğu için tıklamayla
+        odaklandığında tarayıcı bu minik kutuyu görünür kılmak adına filtre
+        panelini (overflow-y-auto) binlerce piksel kaydırıyordu — kullanıcı
+        kutucuğu işaretler işaretlemez panel gözden kayboluyordu.
+      */}
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="peer absolute inset-0 cursor-pointer opacity-0"
+      />
       <span
         className={cn(
-          "grid h-[18px] w-[18px] shrink-0 place-items-center rounded border",
+          "grid h-[18px] w-[18px] shrink-0 place-items-center rounded border peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-surface",
           checked ? "border-accent bg-accent text-accent-fg" : "border-line-strong",
         )}
       >
@@ -389,7 +384,6 @@ function CheckRow({
           </svg>
         )}
       </span>
-      <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
       <span>{label}</span>
       {badge && (
         <span className="ml-auto rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
