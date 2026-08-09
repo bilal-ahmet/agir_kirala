@@ -1,5 +1,5 @@
+import Image from "next/image";
 import { cn } from "@/lib/cn";
-import { storageImageUrl } from "@/lib/image";
 
 // Fotoğraf yoksa tasarlanmış placeholder: photoSeed'e göre çelik tonlu gradyan + grid dokusu.
 
@@ -19,9 +19,9 @@ interface ListingImageProps {
   photoUrl?: string;
   className?: string;
   rounded?: string;
-  /** Supabase dönüştürme genişliği (px). Küçük kartlar için orijinali indirmemek adına. */
+  /** Görselin ekranda kaplayacağı yaklaşık genişlik (px) — srcset seçimi için. */
   width?: number;
-  /** İlk ekranda görünen görsel (hero/galeri) için lazy yerine eager. */
+  /** İlk ekranda görünen görsel (galeri ana karesi) için öncelikli yükleme. */
   priority?: boolean;
 }
 
@@ -35,28 +35,42 @@ export function ListingImage({
   priority,
 }: ListingImageProps) {
   const [from, to] = GRADIENTS[Math.abs(seed) % GRADIENTS.length];
-  const src = storageImageUrl(photoUrl, width);
+
+  // İlan-ekle önizlemesindeki seçili dosyalar blob:/data: URL'leridir; bunlar
+  // sunucuda optimize edilemez, düz <img> ile gösterilir.
+  const yerelOnizleme = !!photoUrl && !photoUrl.startsWith("http");
 
   return (
     <div
       className={cn("relative flex items-center justify-center overflow-hidden", rounded, className)}
       style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
     >
-      {src ? (
-        // Supabase public URL — next/image remotePatterns gerektirmemek için düz img.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt={label ?? ""}
-          loading={priority ? "eager" : "lazy"}
-          decoding="async"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+      {photoUrl ? (
+        yerelOnizleme ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photoUrl}
+            alt={label ?? ""}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          // next/image: Vercel'in görsel optimizasyonu ile otomatik boyutlandırma
+          // + WebP/AVIF. Kartlardaki küçük görseller için tam çözünürlüklü
+          // orijinal indirilmesini bitirir.
+          <Image
+            src={photoUrl}
+            alt={label ?? ""}
+            fill
+            sizes={width ? `${width}px` : "100vw"}
+            priority={priority}
+            className="object-cover"
+          />
+        )
       ) : (
         <div className="bg-grid absolute inset-0 opacity-60" />
       )}
       {label && (
-        <span className="absolute bottom-2 left-2 rounded bg-black/40 px-2 py-0.5 text-[11px] font-medium text-white/80 backdrop-blur">
+        <span className="absolute bottom-2 left-2 z-10 rounded bg-black/40 px-2 py-0.5 text-[11px] font-medium text-white/80 backdrop-blur">
           {label}
         </span>
       )}
