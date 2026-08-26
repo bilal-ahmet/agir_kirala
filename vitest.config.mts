@@ -12,6 +12,11 @@ export default defineConfig({
     hookTimeout: 60_000,
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      // `server-only` Node'da import edilince kasten patlar; testlerde boş
+      // modüle yönlendiriyoruz (bkz. tests/stubs/server-only.ts).
+      "server-only": path.resolve(__dirname, "./tests/stubs/server-only.ts"),
+      "@": path.resolve(__dirname, "./src"),
+    },
   },
 });
