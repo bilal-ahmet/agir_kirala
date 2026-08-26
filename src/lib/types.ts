@@ -149,7 +149,10 @@ export interface Listing {
 /** Yüklenmiş ilan görseli */
 export interface ListingPhoto {
   id: string;
+  /** Orijinal (1600 px'e sığdırılmış WebP; eski kayıtlarda ham yükleme). */
   url: string;
+  /** 400 px WebP küçük boy. Eski kayıtlarda yok — tüketici url'e düşer. */
+  thumbUrl?: string;
 }
 
 export interface RentalRequest {

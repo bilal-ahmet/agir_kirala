@@ -16,6 +16,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Availability, PriceMap } from "../types";
@@ -43,6 +44,9 @@ export const contactPreferenceEnum = pgEnum("contact_preference", [
   "telefon_mesaj",
   "sadece_mesaj",
 ]);
+/** Oturumun hangi istemciden açıldığı — web cookie (24s) vs mobil bearer (60g kayan). */
+export const sessionClientEnum = pgEnum("session_client", ["web", "mobile"]);
+export const devicePlatformEnum = pgEnum("device_platform", ["ios", "android"]);
 
 // ───────── users ─────────
 export const users = pgTable(
@@ -63,6 +67,9 @@ export const users = pgTable(
     city: text("city").notNull().default(""),
     accent: text("accent"),
     memberSince: timestamp("member_since", { withTimezone: true }).notNull().defaultNow(),
+    // Hesap silme = anonimleştirme. Dolu ise oturum açılamaz ve mevcut oturumlar
+    // reddedilir; satır silinmez ki karşı tarafın mesaj/talep/yorum geçmişi kırılmasın.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -136,6 +143,10 @@ export const listingPhotos = pgTable(
       .references(() => listings.id, { onDelete: "cascade" }),
     url: text("url").notNull(),
     storagePath: text("storage_path").notNull(),
+    // Liste/kart görünümü için 400 px WebP küçük boy. NULLABLE olması kritik:
+    // eski satırlar bozulmaz, serializer thumb için url'e düşer (thumbUrl ?? url).
+    thumbUrl: text("thumb_url"),
+    thumbStoragePath: text("thumb_storage_path"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -169,6 +180,15 @@ export const rentalRequests = pgTable(
     index("requests_owner_idx").on(t.ownerId),
     index("requests_renter_idx").on(t.renterId),
     index("requests_listing_idx").on(t.listingId),
+    /**
+     * Idempotency: mobil ağda aynı POST iki kez gidebilir (çift dokunma, timeout
+     * sonrası retry). Aynı ilan + kiralayan + tarih aralığı için yalnızca TEK
+     * "beklemede" talep olabilir. Kısmi index olması bilinçli: talep iptal/red
+     * edildikten sonra aynı tarihlere yeniden talep atılabilir.
+     */
+    uniqueIndex("rental_requests_dedupe")
+      .on(t.listingId, t.renterId, t.startDate, t.endDate)
+      .where(sql`status = 'beklemede'`),
   ],
 );
 
@@ -186,6 +206,10 @@ export const conversations = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // Okundu takibi: sohbetin tam iki sabit katılımcısı olduğu için ayrı tablo
+    // yerine iki sütun yeter. "Okunmamış" = karşı taraftan, benim damgamdan yeni mesaj.
+    renterLastReadAt: timestamp("renter_last_read_at", { withTimezone: true }),
+    ownerLastReadAt: timestamp("owner_last_read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -266,8 +290,13 @@ export const sessions = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    // Cookie'deki ham token'ın SHA-256 hash'i (ham token DB'de tutulmaz).
+    // Cookie'deki / Bearer başlığındaki ham token'ın SHA-256 hash'i (ham token DB'de tutulmaz).
     tokenHash: text("token_hash").notNull(),
+    // web: cookie, 24 saat sabit. mobile: Bearer, 60 gün kayan (günde en çok bir yazma).
+    client: sessionClientEnum("client").notNull().default("web"),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
+    /** "iPhone 15 · AĞIRKİRALA" gibi — "cihazlarım" ekranında gösterilir. */
+    deviceName: text("device_name"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -277,6 +306,38 @@ export const sessions = pgTable(
     // Süresi geçmiş oturumların toplu temizliği için.
     index("sessions_expires_idx").on(t.expiresAt),
   ],
+);
+
+// ───────── device_tokens (push bildirim zemini) ─────────
+// NOT: bildirim GÖNDERİMİ (FCM) henüz yok — bu tablo yalnızca Flutter'ın token
+// kaydedebilmesi için zemin. Gönderim ayrı bir iş olarak planlandı.
+export const deviceTokens = pgTable(
+  "device_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Aynı cihaz token'ı başka bir hesaba geçebilir → unique + upsert ile sahip değişir.
+    token: text("token").notNull(),
+    platform: devicePlatformEnum("platform").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("device_tokens_token_unique").on(t.token), index("device_tokens_user_idx").on(t.userId)],
+);
+
+// ───────── rate_limits ─────────
+// Vercel serverless'te süreç-içi sayaç işe yaramaz (her istek ayrı lambda olabilir),
+// bu yüzden sabit pencereli sayaç DB'de tutulur.
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull().default(0),
+    resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("rate_limits_reset_idx").on(t.resetAt)],
 );
 
 // ───────── password_reset_tokens ─────────
@@ -309,6 +370,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   reviewsReceived: many(reviews, { relationName: "target" }),
   sessions: many(sessions),
   passwordResetTokens: many(passwordResetTokens),
+  deviceTokens: many(deviceTokens),
 }));
 
 export const listingsRelations = relations(listings, ({ one, many }) => ({
@@ -380,6 +442,10 @@ export const passwordResetTokensRelations = relations(passwordResetTokens, ({ on
   user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] }),
 }));
 
+export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
+  user: one(users, { fields: [deviceTokens.userId], references: [users.id] }),
+}));
+
 // ───────── Çıkarımsal tipler ─────────
 export type UserRow = typeof users.$inferSelect;
 export type ListingRow = typeof listings.$inferSelect;
@@ -390,3 +456,4 @@ export type MessageRow = typeof messages.$inferSelect;
 export type ReviewRow = typeof reviews.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type PasswordResetTokenRow = typeof passwordResetTokens.$inferSelect;
+export type DeviceTokenRow = typeof deviceTokens.$inferSelect;

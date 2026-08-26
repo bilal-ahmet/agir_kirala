@@ -15,6 +15,8 @@ export interface ConversationView {
   listingTitle: string;
   other: { id: string; name: string; accent?: string };
   messages: Message[];
+  /** Karşı taraftan, benim son okuma damgamdan sonra gelen mesaj var mı. */
+  unread: boolean;
 }
 
 /** Mesajlar sayfası için: sohbetler + karşı taraf bilgisi + ilan başlığı + mesajlar. */
@@ -65,12 +67,16 @@ export async function conversationViewsFor(userId: string): Promise<Conversation
   return convRows.map((c) => {
     const otherId = c.renterId === userId ? c.ownerId : c.renterId;
     const o = userMap.get(otherId);
+    const own = msgRows.filter((m) => m.conversationId === c.id);
+    // Okuma damgası hiç yoksa (sohbet hiç açılmamış) karşı tarafın her mesajı yeni.
+    const readAt = c.renterId === userId ? c.renterLastReadAt : c.ownerLastReadAt;
     return {
       id: c.id,
       listingId: c.listingId,
       listingTitle: titleMap.get(c.listingId) ?? "İlan",
       other: { id: otherId, name: o?.name ?? "Kullanıcı", accent: o?.accent ?? undefined },
-      messages: msgRows.filter((m) => m.conversationId === c.id).map(toMessage),
+      messages: own.map(toMessage),
+      unread: own.some((m) => m.senderId !== userId && (!readAt || m.createdAt > readAt)),
     };
   });
 }

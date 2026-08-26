@@ -68,7 +68,7 @@ export function toListing(
     availability: row.availability ?? undefined,
     photoSeed: seedFromId(row.id),
     photoCount: sorted.length || undefined,
-    photos: sorted.map((p) => ({ id: p.id, url: p.url })),
+    photos: sorted.map((p) => ({ id: p.id, url: p.url, thumbUrl: p.thumbUrl ?? undefined })),
     ownerVerified: owner?.verified,
     ownerRating: owner ? Number(owner.rating) : undefined,
   };

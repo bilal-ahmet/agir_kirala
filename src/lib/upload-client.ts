@@ -5,25 +5,26 @@ import {
   registerUploadedMediaAction,
   type MediaKind,
 } from "@/lib/actions/uploads";
+import { resizeForUpload } from "@/lib/image-resize";
 
 /**
  * Dosyayı imzalı adrese DOĞRUDAN yükler (tarayıcı → Supabase Storage).
  *
  * fetch yerine XMLHttpRequest kullanılıyor: fetch yükleme ilerlemesi bildirmiyor,
- * 15 MB'lık bir videoda kullanıcıya yüzde göstermek gerekiyor.
+ * büyük bir videoda kullanıcıya yüzde göstermek gerekiyor.
  *
  * Gövde biçimi supabase-js'in uploadToSignedUrl'ü ile aynı: Blob gövdeler
  * FormData içinde "cacheControl" + boş adlı alan olarak gönderilir.
  */
 function putSignedUrl(
   signedUrl: string,
-  file: File,
+  body: Blob,
   onProgress?: (oran: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const body = new FormData();
-    body.append("cacheControl", "3600");
-    body.append("", file);
+    const form = new FormData();
+    form.append("cacheControl", "3600");
+    form.append("", body);
 
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", signedUrl);
@@ -36,7 +37,7 @@ function putSignedUrl(
     };
     xhr.onerror = () => reject(new Error("Ağ hatası — yükleme tamamlanamadı."));
     xhr.ontimeout = () => reject(new Error("Yükleme zaman aşımına uğradı."));
-    xhr.send(body);
+    xhr.send(form);
   });
 }
 
@@ -46,8 +47,12 @@ export interface UploadSonucu {
 }
 
 /**
- * Tek dosyayı uçtan uca yükler: bilet al → doğrudan yükle → veritabanına kaydet.
- * Hiçbir aşamada dosya Next sunucusundan geçmez.
+ * Tek dosyayı uçtan uca yükler: (foto ise küçült) → bilet al → doğrudan yükle →
+ * veritabanına kaydet. Hiçbir aşamada dosya Next sunucusundan geçmez.
+ *
+ * Fotoğraflarda iki dosya gider: 1600 px orijinal + 400 px küçük boy. Küçültme
+ * yapılamazsa (eski tarayıcı) ham dosya yüklenir ve thumbPath gönderilmez —
+ * sunucu bunu opsiyonel kabul ettiği için ilan yine kaydedilir.
  */
 export async function uploadListingMedia(
   listingId: string,
@@ -55,19 +60,33 @@ export async function uploadListingMedia(
   file: File,
   onProgress?: (oran: number) => void,
 ): Promise<UploadSonucu> {
+  const resized = kind === "photo" ? await resizeForUpload(file) : null;
+
   const { ticket, error } = await createUploadTicketAction(
     listingId,
     kind,
     file.type,
-    file.size,
+    resized ? resized.original.size : file.size,
   );
   if (error || !ticket) return { error: error ?? "Yükleme bileti alınamadı." };
 
   try {
-    await putSignedUrl(ticket.signedUrl, file, onProgress);
+    await putSignedUrl(ticket.original.signedUrl, resized?.original ?? file, onProgress);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Yükleme başarısız." };
   }
 
-  return registerUploadedMediaAction(listingId, kind, ticket.path);
+  // Küçük boy: başarısız olursa yükleme iptal EDİLMEZ, yalnızca thumbPath
+  // gönderilmez. Küçültme bir iyileştirmedir, ön koşul değil.
+  let thumbPath: string | undefined;
+  if (resized && ticket.thumb) {
+    try {
+      await putSignedUrl(ticket.thumb.signedUrl, resized.thumb);
+      thumbPath = ticket.thumb.path;
+    } catch {
+      thumbPath = undefined;
+    }
+  }
+
+  return registerUploadedMediaAction(listingId, kind, ticket.original.path, thumbPath);
 }

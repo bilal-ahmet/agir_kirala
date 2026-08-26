@@ -37,6 +37,19 @@ function nonNegative(v: string | string[] | undefined): number | undefined {
   return n < 0 ? 0 : n;
 }
 
+/**
+ * Varlık bayrağı (`fotografli=1`, `videolu=1`).
+ *
+ * Web "1" üretiyor; "true" da kabul edilir çünkü REST istemcileri boolean'ı
+ * doğal olarak böyle serileştirir. Kabul edilmeseydi filtre HATA VERMEDEN
+ * yok sayılır, istemci filtrelenmemiş sonucu doğru sanırdı — fark edilmesi
+ * zor bir hata sınıfı.
+ */
+function flag(v: string | string[] | undefined): true | undefined {
+  const s = str(v)?.toLowerCase();
+  return s === "1" || s === "true" ? true : undefined;
+}
+
 /** Virgülle ayrılmış çoklu seçim değerini diziye çevirir (izin verilen değerlerle sınırlar). */
 function list<T extends string>(
   v: string | string[] | undefined,
@@ -89,8 +102,8 @@ export function parseFilters(params: RawParams): FilterState {
     saticiTipi: list<OwnerType>(params.saticiTipi, OWNER_TYPES),
     yakit: list<FuelType>(params.yakit, FUELS),
     durum: list<ListingCondition>(params.durum, CONDITIONS),
-    fotografli: str(params.fotografli) === "1" ? true : undefined,
-    videolu: str(params.videolu) === "1" ? true : undefined,
+    fotografli: flag(params.fotografli),
+    videolu: flag(params.videolu),
     specs: Object.keys(specs).length ? specs : undefined,
     sirala: (str(params.sirala) as SortKey) || "onerilen",
     sayfa: int(params.sayfa) ?? 1,

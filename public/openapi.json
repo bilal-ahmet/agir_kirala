@@ -1,0 +1,4186 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AĞIRKİRALA API",
+    "version": "1.0.0",
+    "license": {
+      "name": "UNLICENSED",
+      "identifier": "UNLICENSED"
+    },
+    "description": "Ağır vasıta & iş makinesi kiralama pazaryeri — mobil istemci API'si.\n\n**Kimlik doğrulama:** `Authorization: Bearer <token>`. Token /auth/login veya /auth/register ile alınır, 60 gün geçerlidir ve her kullanımda süresi uzar.\n\n**Para:** `totalPrice` ve `rating` ondalık STRING'dir (float yuvarlama hatası olmasın diye). `prices` tam sayı TL olduğu için sayıdır.\n\n**Tarih:** timestamp'ler ISO-8601 UTC; `startDate`/`endDate` `YYYY-MM-DD` (saat dilimi yok); `availability.startTime/endTime` `HH:mm` yerel duvar saati.\n\n**Hatalar:** her hata `{ error: { code, message, fieldErrors? } }` döner. Akış kararları `code` ile verilir — `message` yalnız gösterim içindir ve değişebilir.\n\n**Eksik alanlar:** `required` olmayan bir alanın değeri yoksa anahtar yanıttan TAMAMEN DÜŞÜRÜLÜR — `null` GÖNDERİLMEZ (ör. `videoUrl`, `fuel`, `companyName`, `accent`, `phone`, `ownerRating`). Değeri gerçekten null olabilen alanlar şemada açıkça nullable işaretlidir (ör. `Session.deviceName`, `AppConfig.maintenance.message`, `ListingDetail.owner`). Dart tarafında ilk gruptaki alanlar nullable tiplerle karşılanmalı; ikinci grup zaten nullable olarak üretilir."
+  },
+  "servers": [
+    {
+      "url": "https://agirkirala.example",
+      "description": "Üretim"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Yerel geliştirme"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Listing": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "categorySlug": {
+            "type": "string"
+          },
+          "subCategorySlug": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "city": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          },
+          "prices": {
+            "$ref": "#/components/schemas/PriceMap"
+          },
+          "operator": {
+            "type": "boolean"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "dahil",
+              "ekstra",
+              "yok"
+            ]
+          },
+          "fuel": {
+            "type": "string",
+            "enum": [
+              "dizel",
+              "benzin",
+              "elektrik",
+              "lpg",
+              "hibrit"
+            ]
+          },
+          "condition": {
+            "type": "string",
+            "enum": [
+              "sifir",
+              "ikinci_el"
+            ]
+          },
+          "contactPreference": {
+            "type": "string",
+            "enum": [
+              "telefon_mesaj",
+              "sadece_mesaj"
+            ]
+          },
+          "videoUrl": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "integer"
+          },
+          "specs": {
+            "$ref": "#/components/schemas/SpecMap"
+          },
+          "description": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "aktif",
+              "pasif",
+              "taslak"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "minRentalDays": {
+            "type": "integer"
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Photo"
+            }
+          },
+          "availability": {
+            "$ref": "#/components/schemas/Availability"
+          },
+          "ownerVerified": {
+            "type": "boolean"
+          },
+          "ownerRating": {
+            "description": "Ondalık STRING (ör. \"4.5\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "categorySlug",
+          "subCategorySlug",
+          "brand",
+          "model",
+          "year",
+          "city",
+          "district",
+          "prices",
+          "operator",
+          "transport",
+          "condition",
+          "contactPreference",
+          "usage",
+          "specs",
+          "description",
+          "ownerId",
+          "status",
+          "createdAt",
+          "photos"
+        ],
+        "description": "İlan."
+      },
+      "PriceMap": {
+        "type": "object",
+        "properties": {
+          "saatlik": {
+            "type": "number"
+          },
+          "gunluk": {
+            "type": "number"
+          },
+          "haftalik": {
+            "type": "number"
+          },
+          "aylik": {
+            "type": "number"
+          },
+          "yillik": {
+            "type": "number"
+          }
+        },
+        "description": "Periyot → tam sayı TL. Sahibi yalnız sunduğu periyotları doldurur."
+      },
+      "SpecMap": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "description": "Kategoriye özel teknik özellikler (SpecField.key → değer)."
+      },
+      "Availability": {
+        "type": "object",
+        "properties": {
+          "weekdays": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "0=Pzt … 6=Pz. Boş = tüm günler."
+          },
+          "startTime": {
+            "description": "HH:mm yerel duvar saati — saat dilimi taşımaz.",
+            "type": "string"
+          },
+          "endTime": {
+            "description": "HH:mm yerel duvar saati.",
+            "type": "string"
+          },
+          "dateFrom": {
+            "description": "YYYY-MM-DD",
+            "type": "string"
+          },
+          "dateTo": {
+            "description": "YYYY-MM-DD",
+            "type": "string"
+          }
+        },
+        "required": [
+          "weekdays"
+        ],
+        "description": "İlan sahibinin belirlediği müsaitlik."
+      },
+      "ListingDetail": {
+        "type": "object",
+        "properties": {
+          "listing": {
+            "$ref": "#/components/schemas/Listing"
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "listing",
+          "owner"
+        ]
+      },
+      "ListingPage": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "total",
+          "page",
+          "totalPages"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "bireysel",
+              "kurumsal"
+            ]
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "rating": {
+            "type": "string",
+            "description": "Ondalık STRING (ör. \"4.5\") — float yuvarlama hatası olmasın diye."
+          },
+          "reviewCount": {
+            "type": "integer"
+          },
+          "memberSince": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "phone": {
+            "description": "Halka açık uçlarda yalnız ilan sahibi paylaşmayı seçtiyse.",
+            "type": "string"
+          },
+          "email": {
+            "description": "Yalnız /me yanıtında; halka açık uçlarda ASLA.",
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "accent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "verified",
+          "rating",
+          "reviewCount",
+          "memberSince",
+          "city"
+        ]
+      },
+      "RentalRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "renterId": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "description": "YYYY-MM-DD — yerel gün, saat dilimi taşımaz."
+          },
+          "endDate": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "saatlik",
+              "gunluk",
+              "haftalik",
+              "aylik",
+              "yillik"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "beklemede",
+              "onaylandi",
+              "reddedildi",
+              "iptal"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "totalPrice": {
+            "type": "string",
+            "description": "Ondalık STRING (ör. \"16000.00\")."
+          }
+        },
+        "required": [
+          "id",
+          "listingId",
+          "renterId",
+          "ownerId",
+          "startDate",
+          "endDate",
+          "period",
+          "message",
+          "status",
+          "createdAt",
+          "totalPrice"
+        ]
+      },
+      "RequestView": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/RentalRequest"
+          },
+          "listing": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Listing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "counterpartName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request",
+          "listing",
+          "counterpartName"
+        ]
+      },
+      "Photo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "thumb": {
+            "type": "string",
+            "description": "400 px WebP. Küçük boy yoksa orijinale düşer — asla null değildir."
+          },
+          "original": {
+            "type": "string",
+            "description": "1600 px'e sığdırılmış WebP."
+          }
+        },
+        "required": [
+          "id",
+          "thumb",
+          "original"
+        ]
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "senderId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          }
+        },
+        "required": [
+          "id",
+          "senderId",
+          "text",
+          "createdAt"
+        ]
+      },
+      "Conversation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "participantIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "[kiralayanId, ilanSahibiId]"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          }
+        },
+        "required": [
+          "id",
+          "listingId",
+          "participantIds",
+          "messages",
+          "updatedAt"
+        ]
+      },
+      "ConversationView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "listingTitle": {
+            "type": "string"
+          },
+          "other": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "accent": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "unread": {
+            "type": "boolean",
+            "description": "Karşı taraftan, son okuma damgamdan sonra mesaj var mı."
+          }
+        },
+        "required": [
+          "id",
+          "listingId",
+          "listingTitle",
+          "other",
+          "messages",
+          "unread"
+        ]
+      },
+      "Review": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "reviewerId": {
+            "type": "string"
+          },
+          "reviewerName": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          }
+        },
+        "required": [
+          "id",
+          "listingId",
+          "reviewerId",
+          "reviewerName",
+          "rating",
+          "comment",
+          "createdAt"
+        ]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "client": {
+            "type": "string",
+            "enum": [
+              "web",
+              "mobile"
+            ]
+          },
+          "deviceName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "current": {
+            "type": "boolean",
+            "description": "İsteği yapan oturumun kendisi mi."
+          }
+        },
+        "required": [
+          "id",
+          "client",
+          "deviceName",
+          "lastUsedAt",
+          "createdAt",
+          "expiresAt",
+          "current"
+        ]
+      },
+      "SessionToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Bearer token. Authorization: Bearer <token> olarak gönderilir."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC. Kullanıldıkça kayan şekilde uzar (60 gün)."
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "token",
+          "expiresAt",
+          "user"
+        ]
+      },
+      "Badges": {
+        "type": "object",
+        "properties": {
+          "pendingIncomingRequests": {
+            "type": "integer"
+          },
+          "unreadConversations": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pendingIncomingRequests",
+          "unreadConversations"
+        ]
+      },
+      "AppConfig": {
+        "type": "object",
+        "properties": {
+          "minSupportedVersion": {
+            "type": "object",
+            "properties": {
+              "ios": {
+                "type": "string"
+              },
+              "android": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ios",
+              "android"
+            ]
+          },
+          "maintenance": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "message": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "active",
+              "message"
+            ]
+          },
+          "storeUrls": {
+            "type": "object",
+            "properties": {
+              "appStore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "playStore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "appStore",
+              "playStore"
+            ]
+          }
+        },
+        "required": [
+          "minSupportedVersion",
+          "maintenance",
+          "storeUrls"
+        ]
+      },
+      "UploadTicket": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "photo",
+              "video"
+            ]
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "original": {
+            "$ref": "#/components/schemas/SignedTarget"
+          },
+          "thumb": {
+            "$ref": "#/components/schemas/SignedTarget"
+          }
+        },
+        "required": [
+          "kind",
+          "bucket",
+          "original"
+        ]
+      },
+      "SignedTarget": {
+        "type": "object",
+        "properties": {
+          "signedUrl": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Supabase uploadToSignedUrl(path, token, file) için."
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signedUrl",
+          "token",
+          "path"
+        ]
+      },
+      "CreatedId": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "Ack": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "unauthorized",
+                  "forbidden",
+                  "not_found",
+                  "validation",
+                  "conflict",
+                  "listing_not_active",
+                  "self_action",
+                  "already_exists",
+                  "limit_exceeded",
+                  "rate_limited",
+                  "internal"
+                ],
+                "description": "Sabit makine-okur kod. İstemci AKIŞ KARARLARINI buna göre verir, mesaja bakmaz."
+              },
+              "message": {
+                "type": "string",
+                "description": "Türkçe, kullanıcıya gösterilebilir."
+              },
+              "fieldErrors": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "Tüm hata yanıtlarının ortak zarfı."
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Sağlık kontrolü (varsayılan hâli DB'ye dokunmaz; ?deep=1 yoklar).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config": {
+      "get": {
+        "operationId": "getConfig",
+        "summary": "Minimum desteklenen sürüm, bakım modu, mağaza adresleri.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppConfig"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meta": {
+      "get": {
+        "operationId": "getMeta",
+        "summary": "Kategoriler, markalar, iller, etiketler ve limitler (istemci hardcode etmez).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Taksonomi ve limit sözlüğü — yapısı src/lib/categories.ts, brands.ts, locations.ts ve constants.ts'ten türer, sürüm sürüm genişleyebilir."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Kayıt ve mobil oturum açma.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 6
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string",
+                    "enum": [
+                      "Adana",
+                      "Adıyaman",
+                      "Afyonkarahisar",
+                      "Ağrı",
+                      "Aksaray",
+                      "Amasya",
+                      "Ankara",
+                      "Antalya",
+                      "Ardahan",
+                      "Artvin",
+                      "Aydın",
+                      "Balıkesir",
+                      "Bartın",
+                      "Bayburt",
+                      "Bilecik",
+                      "Bingöl",
+                      "Bitlis",
+                      "Bolu",
+                      "Burdur",
+                      "Bursa",
+                      "Çanakkale",
+                      "Çankırı",
+                      "Çorum",
+                      "Denizli",
+                      "Diyarbakır",
+                      "Düzce",
+                      "Edirne",
+                      "Elazığ",
+                      "Erzincan",
+                      "Erzurum",
+                      "Eskişehir",
+                      "Gaziantep",
+                      "Giresun",
+                      "Gümüşhane",
+                      "Hakkâri",
+                      "Hatay",
+                      "Iğdır",
+                      "Isparta",
+                      "İstanbul",
+                      "İzmir",
+                      "Kahramanmaraş",
+                      "Karabük",
+                      "Karaman",
+                      "Kars",
+                      "Kastamonu",
+                      "Kayseri",
+                      "Kırıkkale",
+                      "Kırklareli",
+                      "Kırşehir",
+                      "Kilis",
+                      "Kocaeli",
+                      "Konya",
+                      "Kütahya",
+                      "Malatya",
+                      "Manisa",
+                      "Mardin",
+                      "Mersin",
+                      "Muğla",
+                      "Muş",
+                      "Nevşehir",
+                      "Niğde",
+                      "Ordu",
+                      "Osmaniye",
+                      "Rize",
+                      "Sakarya",
+                      "Samsun",
+                      "Siirt",
+                      "Sinop",
+                      "Sivas",
+                      "Şanlıurfa",
+                      "Şırnak",
+                      "Tekirdağ",
+                      "Tokat",
+                      "Trabzon",
+                      "Tunceli",
+                      "Uşak",
+                      "Van",
+                      "Yalova",
+                      "Yozgat",
+                      "Zonguldak"
+                    ]
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "bireysel",
+                      "kurumsal"
+                    ]
+                  },
+                  "companyName": {
+                    "type": "string"
+                  },
+                  "deviceName": {
+                    "type": "string",
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "name",
+                  "email",
+                  "password",
+                  "city",
+                  "type"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionToken"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Giriş ve mobil oturum açma.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "deviceName": {
+                    "type": "string",
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionToken"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Mevcut Bearer oturumunu kapatır.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-forgot": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "summary": "Şifre sıfırlama e-postası (hesabın varlığından bağımsız aynı yanıt).",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Oturum kullanıcısı ve favori id'leri.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "favoriteIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "favoriteIds"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateProfile",
+        "summary": "Profil güncelleme.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string",
+                    "enum": [
+                      "Adana",
+                      "Adıyaman",
+                      "Afyonkarahisar",
+                      "Ağrı",
+                      "Aksaray",
+                      "Amasya",
+                      "Ankara",
+                      "Antalya",
+                      "Ardahan",
+                      "Artvin",
+                      "Aydın",
+                      "Balıkesir",
+                      "Bartın",
+                      "Bayburt",
+                      "Bilecik",
+                      "Bingöl",
+                      "Bitlis",
+                      "Bolu",
+                      "Burdur",
+                      "Bursa",
+                      "Çanakkale",
+                      "Çankırı",
+                      "Çorum",
+                      "Denizli",
+                      "Diyarbakır",
+                      "Düzce",
+                      "Edirne",
+                      "Elazığ",
+                      "Erzincan",
+                      "Erzurum",
+                      "Eskişehir",
+                      "Gaziantep",
+                      "Giresun",
+                      "Gümüşhane",
+                      "Hakkâri",
+                      "Hatay",
+                      "Iğdır",
+                      "Isparta",
+                      "İstanbul",
+                      "İzmir",
+                      "Kahramanmaraş",
+                      "Karabük",
+                      "Karaman",
+                      "Kars",
+                      "Kastamonu",
+                      "Kayseri",
+                      "Kırıkkale",
+                      "Kırklareli",
+                      "Kırşehir",
+                      "Kilis",
+                      "Kocaeli",
+                      "Konya",
+                      "Kütahya",
+                      "Malatya",
+                      "Manisa",
+                      "Mardin",
+                      "Mersin",
+                      "Muğla",
+                      "Muş",
+                      "Nevşehir",
+                      "Niğde",
+                      "Ordu",
+                      "Osmaniye",
+                      "Rize",
+                      "Sakarya",
+                      "Samsun",
+                      "Siirt",
+                      "Sinop",
+                      "Sivas",
+                      "Şanlıurfa",
+                      "Şırnak",
+                      "Tekirdağ",
+                      "Tokat",
+                      "Trabzon",
+                      "Tunceli",
+                      "Uşak",
+                      "Van",
+                      "Yalova",
+                      "Yozgat",
+                      "Zonguldak"
+                    ]
+                  },
+                  "companyName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "city"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  },
+                  "required": [
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAccount",
+        "summary": "Hesap silme = anonimleştirme. Yorum/mesaj/talep geçmişi korunur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/password": {
+      "post": {
+        "operationId": "changePassword",
+        "summary": "Şifre değiştirme (mevcut cihaz kalır, diğer oturumlar düşer).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 6
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "closedSessions": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "closedSessions"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "summary": "Aktif oturumlar (cihazlarım).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Session"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/sessions/{id}": {
+      "delete": {
+        "operationId": "revokeSession",
+        "summary": "Uzaktan oturum kapatma.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/badges": {
+      "get": {
+        "operationId": "getBadges",
+        "summary": "Bekleyen talep + okunmamış sohbet sayısı (push yerine polling).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Badges"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings": {
+      "get": {
+        "operationId": "searchListings",
+        "summary": "İlan arama. Filtre parametreleri web ile aynı (q, kategori, marka, il, sayfa, spec_*).",
+        "security": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Serbest metin araması (başlık, marka, model)."
+          },
+          {
+            "name": "kategori",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Kategori slug'ı. Geçerli değerler GET /meta içinde."
+          },
+          {
+            "name": "altKategori",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alt kategori slug'ı."
+          },
+          {
+            "name": "marka",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": []
+              }
+            },
+            "description": "Marka adları, virgülle ayrılmış. Serbest metin — GET /meta içindeki listeden seçilir."
+          },
+          {
+            "name": "il",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "İl adı."
+          },
+          {
+            "name": "ilce",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "İlçe adı."
+          },
+          {
+            "name": "periyot",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "saatlik",
+                  "gunluk",
+                  "haftalik",
+                  "aylik",
+                  "yillik"
+                ]
+              }
+            },
+            "description": "Fiyatlandırma periyodu. Birden çok seçilirse aralarındaki EN DÜŞÜK fiyat baz alınır."
+          },
+          {
+            "name": "minFiyat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Alt fiyat sınırı (₺). Negatif değerler 0'a çekilir."
+          },
+          {
+            "name": "maxFiyat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Üst fiyat sınırı (₺)."
+          },
+          {
+            "name": "minYil",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "En eski model yılı."
+          },
+          {
+            "name": "maxYil",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "En yeni model yılı."
+          },
+          {
+            "name": "operator",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "operatorlu",
+                  "operatorsuz"
+                ]
+              }
+            },
+            "description": "Operatörlü / operatörsüz kiralama."
+          },
+          {
+            "name": "nakliye",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "var",
+                  "yok"
+                ]
+              }
+            },
+            "description": "\"var\" = nakliye dahil veya ekstra."
+          },
+          {
+            "name": "saticiTipi",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "bireysel",
+                  "kurumsal"
+                ]
+              }
+            },
+            "description": "İlan sahibi tipi."
+          },
+          {
+            "name": "yakit",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "dizel",
+                  "benzin",
+                  "elektrik",
+                  "lpg",
+                  "hibrit"
+                ]
+              }
+            },
+            "description": "Yakıt tipi."
+          },
+          {
+            "name": "durum",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "sifir",
+                  "ikinci_el"
+                ]
+              }
+            },
+            "description": "Sıfır / ikinci el."
+          },
+          {
+            "name": "fotografli",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            },
+            "description": "Varlık bayrağı: \"1\" veya \"true\" → yalnızca fotoğrafı olan ilanlar. Diğer değerler yok sayılır (hata verilmez)."
+          },
+          {
+            "name": "videolu",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            },
+            "description": "Varlık bayrağı: \"1\" veya \"true\" → yalnızca videosu olan ilanlar."
+          },
+          {
+            "name": "sirala",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "onerilen",
+                "yeni",
+                "fiyat-artan",
+                "fiyat-azalan",
+                "yil-yeni",
+                "kullanim-az",
+                "puan"
+              ],
+              "default": "onerilen"
+            },
+            "description": "Sıralama anahtarı."
+          },
+          {
+            "name": "sayfa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "1'den başlayan sayfa numarası (12 ilan/sayfa)."
+          },
+          {
+            "name": "spec_*",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Kategoriye özel teknik filtre, ör. `spec_operasyonAgirligi=20`. Sayısal alanlarda MİNİMUM eşik, metin alanlarında tam eşleşme. Geçerli anahtarlar GET /meta içinde."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "12 ilan/sayfa.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingPage"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createListing",
+        "summary": "İlan oluşturma.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "categorySlug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "subCategorySlug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "brand": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "model": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "year": {
+                    "type": "integer",
+                    "minimum": 1980,
+                    "maximum": 2027
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "district": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prices": {
+                    "type": "object",
+                    "properties": {
+                      "saatlik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "gunluk": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "haftalik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "aylik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "yillik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    }
+                  },
+                  "operator": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "transport": {
+                    "default": "yok",
+                    "type": "string",
+                    "enum": [
+                      "dahil",
+                      "ekstra",
+                      "yok"
+                    ]
+                  },
+                  "fuel": {
+                    "type": "string",
+                    "enum": [
+                      "dizel",
+                      "benzin",
+                      "elektrik",
+                      "lpg",
+                      "hibrit"
+                    ]
+                  },
+                  "condition": {
+                    "default": "ikinci_el",
+                    "type": "string",
+                    "enum": [
+                      "sifir",
+                      "ikinci_el"
+                    ]
+                  },
+                  "contactPreference": {
+                    "default": "telefon_mesaj",
+                    "type": "string",
+                    "enum": [
+                      "telefon_mesaj",
+                      "sadece_mesaj"
+                    ]
+                  },
+                  "usage": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "specs": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    }
+                  },
+                  "description": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "minRentalDays": {
+                    "default": 1,
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "availability": {
+                    "type": "object",
+                    "properties": {
+                      "weekdays": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 6
+                        }
+                      },
+                      "startTime": {
+                        "type": "string"
+                      },
+                      "endTime": {
+                        "type": "string"
+                      },
+                      "dateFrom": {
+                        "type": "string"
+                      },
+                      "dateTo": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "weekdays"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "aktif",
+                      "taslak"
+                    ]
+                  }
+                },
+                "required": [
+                  "title",
+                  "categorySlug",
+                  "subCategorySlug",
+                  "brand",
+                  "year",
+                  "city",
+                  "district",
+                  "prices",
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedId"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings/{id}": {
+      "get": {
+        "operationId": "getListing",
+        "summary": "İlan detayı. Aktif olmayan ilan yalnız sahibine açılır, diğerlerine 404.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateListing",
+        "summary": "İlan güncelleme. prices/specs/availability TAM DEĞİŞİR (merge yok).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "brand": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "model": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "year": {
+                    "type": "integer",
+                    "minimum": 1980,
+                    "maximum": 2027
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "district": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prices": {
+                    "type": "object",
+                    "properties": {
+                      "saatlik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "gunluk": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "haftalik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "aylik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "yillik": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    }
+                  },
+                  "operator": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "transport": {
+                    "default": "yok",
+                    "type": "string",
+                    "enum": [
+                      "dahil",
+                      "ekstra",
+                      "yok"
+                    ]
+                  },
+                  "fuel": {
+                    "type": "string",
+                    "enum": [
+                      "dizel",
+                      "benzin",
+                      "elektrik",
+                      "lpg",
+                      "hibrit"
+                    ]
+                  },
+                  "condition": {
+                    "default": "ikinci_el",
+                    "type": "string",
+                    "enum": [
+                      "sifir",
+                      "ikinci_el"
+                    ]
+                  },
+                  "contactPreference": {
+                    "default": "telefon_mesaj",
+                    "type": "string",
+                    "enum": [
+                      "telefon_mesaj",
+                      "sadece_mesaj"
+                    ]
+                  },
+                  "usage": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "specs": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    }
+                  },
+                  "description": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "minRentalDays": {
+                    "default": 1,
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "availability": {
+                    "type": "object",
+                    "properties": {
+                      "weekdays": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 6
+                        }
+                      },
+                      "startTime": {
+                        "type": "string"
+                      },
+                      "endTime": {
+                        "type": "string"
+                      },
+                      "dateFrom": {
+                        "type": "string"
+                      },
+                      "dateTo": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "weekdays"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ack"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteListing",
+        "summary": "İlan silme.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings/{id}/status": {
+      "patch": {
+        "operationId": "updateListingStatus",
+        "summary": "Yayın durumu değiştirme.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "aktif",
+                      "pasif",
+                      "taslak"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ack"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings/{id}/similar": {
+      "get": {
+        "operationId": "getSimilarListings",
+        "summary": "Benzer ilanlar.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Listing"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings/{id}/upload-ticket": {
+      "post": {
+        "operationId": "createUploadTicket",
+        "summary": "İmzalı yükleme bileti. Fotoda orijinal (1600 px) + küçük boy (400 px), ikisi de WebP.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "photo",
+                      "video"
+                    ]
+                  },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadTicket"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings/{id}/media": {
+      "post": {
+        "operationId": "registerMedia",
+        "summary": "Yükleme sonrası kayıt. thumbPath opsiyoneldir.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "photo",
+                      "video"
+                    ]
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "thumbPath": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "path"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "thumbUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "thumbUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings/{id}/video": {
+      "delete": {
+        "operationId": "deleteListingVideo",
+        "summary": "İlan videosunu siler.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/photos/{photoId}": {
+      "delete": {
+        "operationId": "deletePhoto",
+        "summary": "Görseli siler (orijinal + küçük boy).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "photoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/my/listings": {
+      "get": {
+        "operationId": "getMyListings",
+        "summary": "Kendi ilanlarım (taslak ve pasif dahil).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Listing"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/favorites": {
+      "get": {
+        "operationId": "getFavorites",
+        "summary": "Favori ilanlar.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Listing"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/favorites/toggle": {
+      "post": {
+        "operationId": "toggleFavorite",
+        "summary": "Favoriye ekle/çıkar.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "listingId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "listingId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "favorite": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "favorite"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/requests/incoming": {
+      "get": {
+        "operationId": "getIncomingRequests",
+        "summary": "Gelen talepler (ilan sahibi olarak).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RequestView"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/requests/outgoing": {
+      "get": {
+        "operationId": "getOutgoingRequests",
+        "summary": "Gönderdiğim talepler.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RequestView"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/requests": {
+      "post": {
+        "operationId": "createRentalRequest",
+        "summary": "Kiralama talebi. Aynı tarihlere ikinci bekleyen talep 409 döner.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "listingId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "saatlik",
+                      "gunluk",
+                      "haftalik",
+                      "aylik",
+                      "yillik"
+                    ]
+                  },
+                  "message": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "startTime": {
+                    "type": "string"
+                  },
+                  "endTime": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "listingId",
+                  "startDate",
+                  "endDate",
+                  "period"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedId"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{id}/status": {
+      "patch": {
+        "operationId": "updateRequestStatus",
+        "summary": "Talep durumu (onayla/reddet ilan sahibi, iptal kiralayan).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "onaylandi",
+                      "reddedildi",
+                      "iptal"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ack"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "operationId": "getConversations",
+        "summary": "Sohbetler (okunmamış bayrağıyla).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ConversationView"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "startConversation",
+        "summary": "İlan üzerinden sohbet başlat.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "listingId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "listingId",
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversationId": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "$ref": "#/components/schemas/Message"
+                    }
+                  },
+                  "required": [
+                    "conversationId",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}": {
+      "get": {
+        "operationId": "getConversation",
+        "summary": "Sohbet detayı (katılımcı değilse 404).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    }
+                  },
+                  "required": [
+                    "conversation"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}/messages": {
+      "post": {
+        "operationId": "sendMessage",
+        "summary": "Mesaj gönder.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "$ref": "#/components/schemas/Message"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}/read": {
+      "post": {
+        "operationId": "markConversationRead",
+        "summary": "Sohbeti okundu işaretle.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "readAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "readAt"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "operationId": "getPublicUser",
+        "summary": "Halka açık satıcı profili (e-posta sızdırılmaz).",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "listings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Listing"
+                      }
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "listings"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/reviews": {
+      "get": {
+        "operationId": "getUserReviews",
+        "summary": "Satıcıya yapılan yorumlar.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Review"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews": {
+      "post": {
+        "operationId": "createReview",
+        "summary": "Onaylanmış kiralamaya yorum.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rentalRequestId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "comment": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "rentalRequestId",
+                  "rating"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedId"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/device-tokens": {
+      "post": {
+        "operationId": "registerDeviceToken",
+        "summary": "Push cihaz token'ı kaydet (gönderim henüz yok).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 4096
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ios",
+                      "android"
+                    ]
+                  }
+                },
+                "required": [
+                  "token",
+                  "platform"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDeviceToken",
+        "summary": "Push cihaz token'ını sil.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

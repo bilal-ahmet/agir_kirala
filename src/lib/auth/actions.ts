@@ -1,18 +1,24 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { passwordResetTokens, sessions, users } from "../db/schema";
 import { getUserRowByEmail } from "../db/queries/users";
-import { PROVINCE_NAMES } from "../locations";
-import { sendPasswordResetEmail } from "../email";
-import { hashPassword, verifyPassword } from "./password";
-import { createSession, destroySession, hashToken, verifySession } from "./session";
+import * as coreAuth from "../core/auth";
+import { updateProfile } from "../core/account";
+import { collectFieldErrors } from "../core/errors";
+import { profileSchema } from "../core/schemas";
+import { hashPassword } from "./password";
+import { hashToken } from "./token";
+import { createSession, destroySession, verifySession } from "./session";
+
+// Doğrulama şemaları src/lib/core/schemas.ts içinde: aynı kuralları JSON API'nin
+// ikinci kez yazması gerekmesin diye. Buradaki fonksiyonlar FormData'yı çözüp
+// core'a devreder.
 
 export interface AuthState {
   /** Forma ait genel hata (ör. "E-posta veya şifre hatalı"). */
@@ -24,46 +30,25 @@ export interface AuthState {
   message?: string;
 }
 
-/**
- * Zod hatalarının TAMAMINI alan bazında toplar.
- * Eskiden yalnızca issues[0] dönüyordu; kullanıcı her hata için ayrı ayrı
- * sunucuya gidip geliyordu.
- */
-function collectFieldErrors(error: z.ZodError): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "_");
-    if (!out[key]) out[key] = issue.message;
-  }
-  return out;
-}
-
 /** next parametresini güvenli (yalnızca site-içi göreli yol) hale getirir. */
 function safeNext(raw: FormDataEntryValue | null): string {
   const s = typeof raw === "string" ? raw : "";
   return s.startsWith("/") && !s.startsWith("//") ? s : "/hesap";
 }
 
-const loginSchema = z.object({
-  email: z.string().trim().email("Geçerli bir e-posta girin."),
-  password: z.string().min(1, "Şifrenizi girin."),
-});
+/** Core hata sonucunu form durumuna çevirir. */
+function toAuthState(error: { message: string; fieldErrors?: Record<string, string> }): AuthState {
+  return { error: error.message, fieldErrors: error.fieldErrors };
+}
 
 export async function loginAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
+  const res = await coreAuth.authenticate({
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
   });
-  if (!parsed.success) {
-    return { error: "Lütfen aşağıdaki alanları düzeltin.", fieldErrors: collectFieldErrors(parsed.error) };
-  }
+  if (!res.ok) return toAuthState(res.error);
 
-  const row = await getUserRowByEmail(parsed.data.email);
-  if (!row || !(await verifyPassword(parsed.data.password, row.passwordHash))) {
-    return { error: "E-posta veya şifre hatalı." };
-  }
-
-  await createSession(row.id);
+  await createSession(res.value.id);
   redirect(safeNext(formData.get("next")));
 }
 
@@ -74,64 +59,19 @@ export async function demoLoginAction(formData: FormData): Promise<void> {
   redirect(safeNext(formData.get("next")));
 }
 
-const registerSchema = z
-  .object({
-    name: z.string().trim().min(2, "Ad soyad girin (en az 2 karakter)."),
-    email: z.string().trim().email("Geçerli bir e-posta girin."),
-    password: z.string().min(6, "Şifre en az 6 karakter olmalı."),
-    // Telefon isteğe bağlı: paylaşmak istemeyenler ilanlarında yalnızca
-    // site içi mesajla iletişim kurabilir (bkz. contactPreference).
-    phone: z.string().trim().optional(),
-    city: z.enum(PROVINCE_NAMES as [string, ...string[]], { message: "Şehir seçin." }),
-    type: z.enum(["bireysel", "kurumsal"]),
-    companyName: z.string().trim().optional(),
-  })
-  .refine((d) => d.type !== "kurumsal" || (d.companyName && d.companyName.length > 1), {
-    message: "Firma adı girin.",
-    path: ["companyName"],
-  });
-
 export async function registerAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  const parsed = registerSchema.safeParse({
-    name: formData.get("name"),
-    email: formData.get("email"),
-    password: formData.get("password"),
-    phone: formData.get("phone") || undefined,
-    city: formData.get("city"),
-    type: formData.get("type"),
-    companyName: formData.get("companyName") || undefined,
+  const res = await coreAuth.registerUser({
+    name: String(formData.get("name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    phone: (formData.get("phone") as string) || undefined,
+    city: String(formData.get("city") ?? ""),
+    type: (formData.get("type") as "bireysel" | "kurumsal") ?? "bireysel",
+    companyName: (formData.get("companyName") as string) || undefined,
   });
-  if (!parsed.success) {
-    return {
-      error: "Lütfen işaretli alanları düzeltin.",
-      fieldErrors: collectFieldErrors(parsed.error),
-    };
-  }
-  const d = parsed.data;
+  if (!res.ok) return toAuthState(res.error);
 
-  const existing = await getUserRowByEmail(d.email);
-  if (existing) {
-    return {
-      error: "Lütfen işaretli alanları düzeltin.",
-      fieldErrors: { email: "Bu e-posta zaten kayıtlı." },
-    };
-  }
-
-  const [created] = await db
-    .insert(users)
-    .values({
-      name: d.name,
-      email: d.email.toLowerCase(),
-      passwordHash: await hashPassword(d.password),
-      type: d.type,
-      companyName: d.type === "kurumsal" ? d.companyName : null,
-      phone: d.phone ?? "",
-      city: d.city,
-      accent: "#f5b100",
-    })
-    .returning({ id: users.id });
-
-  await createSession(created.id);
+  await createSession(res.value.id);
   redirect(safeNext(formData.get("next")));
 }
 
@@ -139,13 +79,6 @@ export async function logoutAction(): Promise<void> {
   await destroySession();
   redirect("/");
 }
-
-const profileSchema = z.object({
-  name: z.string().trim().min(2, "Ad soyad girin."),
-  phone: z.string().trim().optional(),
-  city: z.enum(PROVINCE_NAMES as [string, ...string[]], { message: "Şehir seçin." }),
-  companyName: z.string().trim().optional(),
-});
 
 export async function updateProfileAction(
   _prev: AuthState,
@@ -161,28 +94,18 @@ export async function updateProfileAction(
   if (!parsed.success) {
     return {
       error: "Lütfen işaretli alanları düzeltin.",
-      fieldErrors: collectFieldErrors(parsed.error),
+      fieldErrors: collectFieldErrors(parsed.error.issues),
     };
   }
 
-  await db
-    .update(users)
-    .set({
-      name: parsed.data.name,
-      phone: parsed.data.phone ?? "",
-      city: parsed.data.city,
-      companyName: user.type === "kurumsal" ? (parsed.data.companyName ?? null) : null,
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, user.id));
+  const res = await updateProfile(user, parsed.data);
+  if (!res.ok) return toAuthState(res.error);
 
   revalidatePath("/hesap/profil");
   return { success: true };
 }
 
 // ───────── Şifre sıfırlama ─────────
-
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 saat
 
 /** Sıfırlama linkinin mutlak adresi — proxy arkasında da doğru host'u kullanır. */
 async function siteOrigin(): Promise<string> {
@@ -193,7 +116,7 @@ async function siteOrigin(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-const forgotSchema = z.object({
+const forgotFormSchema = z.object({
   email: z.string().trim().email("Geçerli bir e-posta girin."),
 });
 
@@ -205,42 +128,17 @@ export async function requestPasswordResetAction(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  const parsed = forgotSchema.safeParse({ email: formData.get("email") });
+  const parsed = forgotFormSchema.safeParse({ email: formData.get("email") });
   if (!parsed.success) {
     return {
       error: "Lütfen işaretli alanları düzeltin.",
-      fieldErrors: collectFieldErrors(parsed.error),
+      fieldErrors: collectFieldErrors(parsed.error.issues),
     };
   }
 
-  const genericSuccess: AuthState = {
-    success: true,
-    message:
-      "E-posta adresi kayıtlıysa şifre sıfırlama bağlantısı gönderildi. Gelen kutunuzu (ve spam klasörünü) kontrol edin.",
-  };
-
-  const row = await getUserRowByEmail(parsed.data.email);
-  if (!row) return genericSuccess;
-
-  // Süresi geçmiş token'ları temizle ve yenisini üret.
-  await db.delete(passwordResetTokens).where(lt(passwordResetTokens.expiresAt, new Date()));
-
-  const token = randomBytes(32).toString("hex");
-  await db.insert(passwordResetTokens).values({
-    userId: row.id,
-    tokenHash: hashToken(token),
-    expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
-  });
-
-  const url = `${await siteOrigin()}/sifre-sifirla?token=${token}`;
-  try {
-    await sendPasswordResetEmail(row.email, url);
-  } catch (e) {
-    console.error("Şifre sıfırlama e-postası gönderilemedi:", e);
-    return { error: "E-posta gönderilemedi. Lütfen daha sonra tekrar deneyin." };
-  }
-
-  return genericSuccess;
+  const res = await coreAuth.sendPasswordResetFor(parsed.data.email, await siteOrigin());
+  if (!res.ok) return toAuthState(res.error);
+  return { success: true, message: res.value.message };
 }
 
 const resetSchema = z
@@ -257,6 +155,10 @@ const resetSchema = z
 /**
  * Token'ı doğrular, şifreyi günceller, token'ı mühürler ve kullanıcının
  * TÜM oturumlarını kapatır (çalınmış oturum kalmasın).
+ *
+ * Oturum içi şifre değiştirmeden (core/account.changePassword) kasıtlı olarak
+ * farklıdır: orası mevcut cihazı ayakta bırakır, çünkü kullanıcı eski şifreyi
+ * zaten biliyordur. Burası ise olası bir ele geçirme senaryosudur.
  */
 export async function resetPasswordAction(
   _prev: AuthState,
@@ -270,7 +172,7 @@ export async function resetPasswordAction(
   if (!parsed.success) {
     return {
       error: "Lütfen işaretli alanları düzeltin.",
-      fieldErrors: collectFieldErrors(parsed.error),
+      fieldErrors: collectFieldErrors(parsed.error.issues),
     };
   }
 
