@@ -440,6 +440,7 @@ interface Endpoint {
 const ENDPOINTS: Endpoint[] = [
   { method: "get", path: "/health", id: "health", summary: "Sağlık kontrolü (varsayılan hâli DB'ye dokunmaz; ?deep=1 yoklar).", auth: false, response: obj({ ok: { type: "boolean" } }, ["ok"]) },
   { method: "get", path: "/config", id: "getConfig", summary: "Minimum desteklenen sürüm, bakım modu, mağaza adresleri.", auth: false, response: ref("AppConfig") },
+  { method: "get", path: "/home", id: "getHome", summary: "Ana ekran verisi tek round-trip: toplam aktif ilan, kategori sayilari, one cikan ilanlar. ?limit ile ilan adedi (varsayilan 9, en fazla 24).", auth: false, response: ref("HomeFeed") },
   { method: "get", path: "/meta", id: "getMeta", summary: "Kategoriler, markalar, iller, etiketler ve limitler (istemci hardcode etmez).", auth: false, responseNote: "Taksonomi ve limit sözlüğü — yapısı src/lib/categories.ts, brands.ts, locations.ts ve constants.ts'ten türer, sürüm sürüm genişleyebilir." },
 
   { method: "post", path: "/auth/register", id: "register", summary: "Kayıt ve mobil oturum açma.", auth: false, request: registerBodySchema, response: ref("SessionToken"), status: 201 },
@@ -655,6 +656,18 @@ export function buildOpenApiDocument(): Json {
           thumb: ref("SignedTarget"),
         }),
         SignedTarget: jsonSchema(signedTargetSchema),
+        HomeFeed: obj(
+          {
+            totalActive: { type: "integer" },
+            categoryCounts: {
+              type: "object",
+              additionalProperties: { type: "integer" },
+              description: "Kategori slug -> aktif ilan sayisi.",
+            },
+            featured: arrayOf(ref("Listing")),
+          },
+          ["totalActive", "categoryCounts", "featured"],
+        ),
         CreatedId: obj({ id: { type: "string" } }, ["id"]),
         Ack: obj({ ok: { type: "boolean" } }, ["ok"]),
         Error: jsonSchema(errorSchema),

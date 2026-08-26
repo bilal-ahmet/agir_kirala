@@ -820,6 +820,32 @@
           "path"
         ]
       },
+      "HomeFeed": {
+        "type": "object",
+        "properties": {
+          "totalActive": {
+            "type": "integer"
+          },
+          "categoryCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Kategori slug -> aktif ilan sayisi."
+          },
+          "featured": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            }
+          }
+        },
+        "required": [
+          "totalActive",
+          "categoryCounts",
+          "featured"
+        ]
+      },
       "CreatedId": {
         "type": "object",
         "properties": {
@@ -952,6 +978,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AppConfig"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/home": {
+      "get": {
+        "operationId": "getHome",
+        "summary": "Ana ekran verisi tek round-trip: toplam aktif ilan, kategori sayilari, one cikan ilanlar. ?limit ile ilan adedi (varsayilan 9, en fazla 24).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeFeed"
                 }
               }
             }
