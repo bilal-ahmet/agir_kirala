@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
+const dir = import.meta.dirname;
+
 export default defineConfig({
   test: {
     environment: "node",
@@ -15,8 +17,8 @@ export default defineConfig({
     alias: {
       // `server-only` Node'da import edilince kasten patlar; testlerde boş
       // modüle yönlendiriyoruz (bkz. tests/stubs/server-only.ts).
-      "server-only": path.resolve(__dirname, "./tests/stubs/server-only.ts"),
-      "@": path.resolve(__dirname, "./src"),
+      "server-only": path.resolve(dir, "./tests/stubs/server-only.ts"),
+      "@": path.resolve(dir, "./src"),
     },
   },
 });

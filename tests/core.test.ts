@@ -206,8 +206,9 @@ describe("talepler", () => {
     });
     const { id } = value<{ id: string }>(res);
     const row = await db.query.rentalRequests.findFirst({ where: eq(rentalRequests.id, id) });
-    // 2 gün × 8000 — istemciden gelen bir tutar kullanılmaz.
-    expect(Number(row?.totalPrice)).toBe(16000);
+    // 1–3 Eylül = 3 gün (daysBetween iki ucu da dahil sayar) × 8000.
+    // İstemciden gelen bir tutar kullanılmaz; sunucu yeniden hesaplar.
+    expect(Number(row?.totalPrice)).toBe(24000);
   });
 
   it("kendi ilanına talep gönderilemez", async () => {

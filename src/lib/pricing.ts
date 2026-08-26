@@ -3,7 +3,10 @@
 
 import type { PriceMap, RentalPeriod } from "./types";
 
-/** İki tarih arasındaki gün sayısı (dahil). daysBetween ile aynı mantık. */
+/**
+ * İki tarih arasındaki gün sayısı — iki uç da DAHİL: 1–3 Eylül = 3 gün.
+ * Client önizleme (format.ts üzerinden) ve sunucu tutarı bunu paylaşır.
+ */
 export function daysBetween(startISO: string, endISO: string): number {
   const start = new Date(startISO);
   const end = new Date(endISO);

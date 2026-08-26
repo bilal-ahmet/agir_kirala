@@ -76,10 +76,11 @@ export function timeAgo(iso: string): string {
   return `${Math.floor(months / 12)} yıl önce`;
 }
 
-/** İki tarih arasındaki gün sayısı (dahil) */
-export function daysBetween(startISO: string, endISO: string): number {
-  const start = new Date(startISO);
-  const end = new Date(endISO);
-  const diff = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-  return Math.max(diff + 1, 0);
-}
+/**
+ * İki tarih arasındaki gün sayısı (iki uç da dahil).
+ *
+ * Gövdesi burada DEĞİL: tutarı hesaplayan sunucu da aynı fonksiyonu kullanmak
+ * zorunda, yoksa formdaki önizleme ile faturalanan tutar sessizce ayrışır.
+ * Tek kaynak ./pricing; burası yalnızca eski import yolunu koruyor.
+ */
+export { daysBetween } from "./pricing";
