@@ -10,7 +10,12 @@ import type { CreateListingInput, UpdateListingInput } from "../core/schemas";
 // için ince sarmalayıcılardır (oturum + revalidate + eski `{ error }` sözleşmesi).
 // Aynı core'u /api/v1 route handler'ları kendi HTTP statüleriyle çağırır.
 
-export type { CreateListingInput, UpdateListingInput };
+// UYARI: "use server" dosyalari YALNIZCA async fonksiyon export edebilir.
+// Tip re-export'u (`export type { X }`) burada calisma aninda
+// "ReferenceError: X is not defined" veriyor: derleyici modulu donusturuken
+// tip-only isaretini kaybedip tanimsiz bir runtime bagi birakiyor. tsc ve
+// `next build` bunu YAKALAMAZ; hata yalnizca action cagrildiginda ortaya cikar.
+// Tipler kendi kaynak modullerinden import edilmeli.
 
 export async function createListingAction(
   input: CreateListingInput,

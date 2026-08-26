@@ -7,7 +7,12 @@ import type { MediaKind, UploadTicket } from "../core/uploads";
 
 // İş mantığı src/lib/core/uploads.ts içinde (bilet üretimi, doğrulama, kayıt).
 
-export type { MediaKind, UploadTicket };
+// UYARI: "use server" dosyalari YALNIZCA async fonksiyon export edebilir.
+// Tip re-export'u (`export type { X }`) burada calisma aninda
+// "ReferenceError: X is not defined" veriyor: derleyici modulu donusturuken
+// tip-only isaretini kaybedip tanimsiz bir runtime bagi birakiyor. tsc ve
+// `next build` bunu YAKALAMAZ; hata yalnizca action cagrildiginda ortaya cikar.
+// Tipler kendi kaynak modullerinden import edilmeli.
 
 /**
  * İmzalı yükleme bileti üretir. Foto biletleri hem orijinal (1600 px) hem küçük

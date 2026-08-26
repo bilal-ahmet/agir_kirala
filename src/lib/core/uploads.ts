@@ -8,6 +8,8 @@ import { getSupabaseAdmin, LISTING_PHOTOS_BUCKET, LISTING_VIDEOS_BUCKET } from "
 import { ALLOWED_VIDEO_TYPES, MAX_VIDEO_BYTES } from "../constants";
 import type { User } from "../types";
 import { fail, mutated, type MutationResult } from "./errors";
+import type { MediaKind } from "./schemas";
+export type { MediaKind };
 import { assertOwnership } from "./listings";
 
 /**
@@ -37,7 +39,6 @@ const VIDEO_EXT: Record<string, string> = {
   "video/quicktime": "mov",
 };
 
-export type MediaKind = "photo" | "video";
 
 /** Tek bir imzalı hedef. `token`, Flutter'ın uploadToSignedUrl(path, token, file) çağrısı için. */
 export interface SignedTarget {

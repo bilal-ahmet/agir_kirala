@@ -3,8 +3,10 @@
 import {
   createUploadTicketAction,
   registerUploadedMediaAction,
-  type MediaKind,
 } from "@/lib/actions/uploads";
+// Tip action modulunden DEGIL kaynagindan gelir: "use server" dosyalari
+// tip re-export edemez (calisma aninda ReferenceError).
+import type { MediaKind } from "@/lib/core/schemas";
 import { resizeForUpload } from "@/lib/image-resize";
 
 /**

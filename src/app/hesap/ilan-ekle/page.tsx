@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { useAuth } from "@/context/auth-context";
-import { createListingAction, type CreateListingInput } from "@/lib/actions/listings";
+import { createListingAction } from "@/lib/actions/listings";
+// Tip action modulunden DEGIL kaynagindan gelir: "use server" dosyalari
+// tip re-export edemez (calisma aninda ReferenceError).
+import type { CreateListingInput } from "@/lib/core/schemas";
 import { uploadListingMedia } from "@/lib/upload-client";
 import { CATEGORIES, getCategory } from "@/lib/categories";
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";

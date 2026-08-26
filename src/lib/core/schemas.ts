@@ -170,6 +170,10 @@ export const sendMessageSchema = z.object({
 
 // ───────── Medya ─────────
 
+/** Yuklenebilir medya turu. Saf modulde durur ki "use client" dosyalari da
+ * (upload-client) server-only bir modulu cekmeden import edebilsin. */
+export type MediaKind = "photo" | "video";
+
 export const uploadTicketSchema = z.object({
   kind: z.enum(["photo", "video"]),
   /**

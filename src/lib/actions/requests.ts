@@ -8,7 +8,12 @@ import type { CreateRentalRequestInput } from "../core/schemas";
 
 // İş mantığı src/lib/core/requests.ts içinde.
 
-export type { CreateRentalRequestInput };
+// UYARI: "use server" dosyalari YALNIZCA async fonksiyon export edebilir.
+// Tip re-export'u (`export type { X }`) burada calisma aninda
+// "ReferenceError: X is not defined" veriyor: derleyici modulu donusturuken
+// tip-only isaretini kaybedip tanimsiz bir runtime bagi birakiyor. tsc ve
+// `next build` bunu YAKALAMAZ; hata yalnizca action cagrildiginda ortaya cikar.
+// Tipler kendi kaynak modullerinden import edilmeli.
 
 export async function createRentalRequestAction(
   input: CreateRentalRequestInput,

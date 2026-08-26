@@ -14,6 +14,18 @@ Route handler'lar server action'ları **sarmaz** — ikisi de aynı core fonksiy
 çağırır. Böylece `redirect()`, `revalidatePath()` ve Türkçe string hata bagajı
 API'ye sızmaz, iş kuralı da iki yerde kopyalanmaz.
 
+## Tuzak: "use server" dosyaları tip export EDEMEZ
+
+`src/lib/actions/*.ts` dosyaları **yalnızca async fonksiyon** export edebilir.
+`export type { X }` yazmak çalışma anında `ReferenceError: X is not defined`
+üretir: derleyici modülü dönüştürürken tip-only işaretini kaybedip tanımsız bir
+runtime bağı bırakıyor.
+
+Bunu **`tsc` de `next build` de yakalamaz** — hata yalnızca o modülü içeren bir
+sayfada herhangi bir server action çağrıldığında ortaya çıkar ve tarayıcıda
+"This page couldn't load" olarak görünür. Tipleri kaynağından import edin
+(`@/lib/core/schemas`, `@/lib/core/uploads`).
+
 ## Hata sözleşmesi
 
 ```json
