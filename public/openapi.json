@@ -11,7 +11,7 @@
   },
   "servers": [
     {
-      "url": "https://agirkirala.example",
+      "url": "https://agirkirala.vercel.app",
       "description": "Üretim"
     },
     {
