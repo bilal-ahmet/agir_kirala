@@ -3,7 +3,6 @@ import "server-only";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "../db";
 import {
-  deviceTokens,
   favorites,
   listings,
   passwordResetTokens,
@@ -126,8 +125,8 @@ export async function anonymizeAccount(userId: string): Promise<MutationResult<{
 
     // Erişim anında kapanır (getSessionContext deletedAt'i zaten reddeder ama
     // satırları bırakmanın anlamı yok) + kişisel tercihler temizlenir.
+    // Push aboneliği OneSignal tarafında: istemci OneSignal.logout() çağırır.
     await tx.delete(sessions).where(eq(sessions.userId, userId));
-    await tx.delete(deviceTokens).where(eq(deviceTokens.userId, userId));
     await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
     await tx.delete(favorites).where(eq(favorites.userId, userId));
 

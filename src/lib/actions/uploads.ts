@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/uploads";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 import type { MediaKind, UploadTicket } from "../core/uploads";
 
 // İş mantığı src/lib/core/uploads.ts içinde (bilet üretimi, doğrulama, kayıt).
@@ -43,6 +43,6 @@ export async function registerUploadedMediaAction(
   const user = await verifySession();
   const res = await core.registerUploadedMedia(user, listingId, kind, path, thumbPath);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return { url: res.value.url };
 }

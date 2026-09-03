@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/reviews";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 import type { CreateReviewInput } from "../core/schemas";
 
 // İş mantığı src/lib/core/reviews.ts içinde.
@@ -21,6 +21,6 @@ export async function createReviewAction(
   const user = await verifySession();
   const res = await core.createReview(user, input);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return { ok: true };
 }

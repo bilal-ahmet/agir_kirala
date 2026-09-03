@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/uploads";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 
 // Görsel YÜKLEME burada değil: dosyalar istemciden doğrudan Supabase'e gider
 // (src/lib/core/uploads.ts + src/lib/upload-client.ts). Sebebi Vercel Serverless
@@ -13,6 +13,6 @@ export async function deleteListingPhotoAction(photoId: string): Promise<{ error
   const user = await verifySession();
   const res = await core.deleteListingPhoto(user, photoId);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return {};
 }

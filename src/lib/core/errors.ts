@@ -12,6 +12,8 @@
  * Saf modül: server-only YOK (test ve OpenAPI script'i de import eder).
  */
 
+import type { Notification } from "../notify/types";
+
 export type AppErrorCode =
   | "unauthorized"
   | "forbidden"
@@ -58,7 +60,8 @@ export const httpStatus: Record<AppErrorCode, number> = {
 export type Result<T> = { ok: true; value: T } | { ok: false; error: AppError };
 
 /**
- * Mutasyon sonucu — başarıda etkilenen web yollarını da taşır.
+ * Mutasyon sonucu — başarıda etkilenen web yollarını ve gönderilecek push
+ * bildirimlerini de taşır.
  *
  * revalidatePath çağırmak taşıma katmanının işidir, ama HANGİ yolların bayatladığı
  * iş mantığının bilgisidir. Yol listesi burada tek kaynakta durur; hem server action
@@ -66,15 +69,19 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: AppError };
  * mobilden eklenen bir ilan web'de görünmezdi.
  */
 export type MutationResult<T> =
-  | { ok: true; value: T; revalidate: string[] }
+  | { ok: true; value: T; revalidate: string[]; notify: Notification[] }
   | { ok: false; error: AppError };
 
 export function ok<T>(value: T): Result<T> {
   return { ok: true, value };
 }
 
-export function mutated<T>(value: T, revalidate: string[] = []): MutationResult<T> {
-  return { ok: true, value, revalidate };
+export function mutated<T>(
+  value: T,
+  revalidate: string[] = [],
+  notify: Notification[] = [],
+): MutationResult<T> {
+  return { ok: true, value, revalidate, notify };
 }
 
 export function fail(

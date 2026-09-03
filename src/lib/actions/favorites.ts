@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/favorites";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 
 /** Favori ekle/çıkar. Oturum yoksa /giris'e yönlendirir. Yeni durumu döner. */
 export async function toggleFavoriteAction(listingId: string): Promise<{ favorite: boolean }> {
@@ -10,6 +10,6 @@ export async function toggleFavoriteAction(listingId: string): Promise<{ favorit
   const res = await core.toggleFavorite(user, listingId);
   // toggleFavorite hata döndürmez (yoksa ekler, varsa siler) — sözleşme korunuyor.
   if (!res.ok) return { favorite: false };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return { favorite: res.value.favorite };
 }

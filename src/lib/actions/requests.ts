@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/requests";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 import type { RequestStatus } from "../types";
 import type { CreateRentalRequestInput } from "../core/schemas";
 
@@ -21,7 +21,7 @@ export async function createRentalRequestAction(
   const user = await verifySession();
   const res = await core.createRentalRequest(user, input);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return { ok: true };
 }
 
@@ -33,6 +33,6 @@ export async function updateRequestStatusAction(
   const user = await verifySession();
   const res = await core.updateRequestStatus(user, requestId, status);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return {};
 }

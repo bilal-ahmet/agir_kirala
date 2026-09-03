@@ -7,6 +7,7 @@ import { recomputeUserRating } from "../db/queries/reviews";
 import type { User } from "../types";
 import { fail, mutated, type MutationResult } from "./errors";
 import { createReviewSchema, type CreateReviewInput } from "./schemas";
+import { preview, type Notification } from "../notify/types";
 
 /** Onaylanmış kiralamanın kiralayanı, ilan sahibine yorum bırakır. */
 export async function createReview(
@@ -48,5 +49,18 @@ export async function createReview(
 
   await recomputeUserRating(req.ownerId);
 
-  return mutated({ id: created.id }, ["/hesap/taleplerim", `/ilanlar/${req.listingId}`]);
+  const notification: Notification = {
+    userId: req.ownerId,
+    title: "Yeni değerlendirme",
+    body: preview(
+      `${user.name} ${d.rating} yıldız verdi${d.comment ? ` · ${d.comment}` : ""}`,
+    ),
+    data: { type: "review_created", id: created.id, listingId: req.listingId },
+  };
+
+  return mutated(
+    { id: created.id },
+    ["/hesap/taleplerim", `/ilanlar/${req.listingId}`],
+    [notification],
+  );
 }

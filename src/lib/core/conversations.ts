@@ -6,6 +6,7 @@ import { conversations, listings, messages } from "../db/schema";
 import type { Message, User } from "../types";
 import { fail, mutated, type MutationResult } from "./errors";
 import { messageTextSchema } from "./schemas";
+import { preview, type Notification } from "../notify/types";
 
 const REVALIDATE = ["/hesap/mesajlar"];
 
@@ -14,7 +15,18 @@ interface MessageInsertRow {
   sender_id: string;
   text: string;
   created_at: string | Date;
+  /** Bildirim alıcısını belirlemek için sohbetin iki katılımcısı. */
+  renter_id: string;
+  owner_id: string;
+  listing_id: string;
   [key: string]: unknown;
+}
+
+interface InsertedMessage {
+  message: Message;
+  /** Mesajı gönderen DIŞINDAKİ katılımcı — bildirim ona gider. */
+  recipientId: string;
+  listingId: string;
 }
 
 /**
@@ -26,10 +38,10 @@ async function insertMessage(
   conversationId: string,
   senderId: string,
   text: string,
-): Promise<Message | undefined> {
+): Promise<InsertedMessage | undefined> {
   const rows = await db.execute<MessageInsertRow>(sql`
     with authorized as (
-      select id from ${conversations}
+      select id, renter_id, owner_id, listing_id from ${conversations}
       where id = ${conversationId}
         and (renter_id = ${senderId} or owner_id = ${senderId})
     ),
@@ -43,17 +55,37 @@ async function insertMessage(
       where id in (select id from authorized)
       returning id
     )
-    select inserted.*, (select count(*)::int from touched) as touched_n
-    from inserted
+    select inserted.*, authorized.renter_id, authorized.owner_id, authorized.listing_id,
+           (select count(*)::int from touched) as touched_n
+    from inserted, authorized
   `);
 
   const row = rows[0];
   if (!row) return undefined;
   return {
-    id: row.id,
-    senderId: row.sender_id,
-    text: row.text,
-    createdAt: new Date(row.created_at).toISOString(),
+    message: {
+      id: row.id,
+      senderId: row.sender_id,
+      text: row.text,
+      createdAt: new Date(row.created_at).toISOString(),
+    },
+    // Gönderen kendine bildirim almamalı.
+    recipientId: row.renter_id === senderId ? row.owner_id : row.renter_id,
+    listingId: row.listing_id,
+  };
+}
+
+/** Yeni mesaj bildirimi. Başlık gönderenin adı — bildirim listesinde tanınır. */
+function messageNotification(
+  sender: User,
+  inserted: InsertedMessage,
+  conversationId: string,
+): Notification {
+  return {
+    userId: inserted.recipientId,
+    title: sender.name,
+    body: preview(inserted.message.text),
+    data: { type: "message", id: conversationId, listingId: inserted.listingId },
   };
 }
 
@@ -93,10 +125,12 @@ export async function startConversation(
       .returning();
   }
 
-  const message = await insertMessage(conv.id, user.id, parsedText.data);
-  if (!message) return fail("internal", "Mesaj gönderilemedi.");
+  const inserted = await insertMessage(conv.id, user.id, parsedText.data);
+  if (!inserted) return fail("internal", "Mesaj gönderilemedi.");
 
-  return mutated({ conversationId: conv.id, message }, REVALIDATE);
+  return mutated({ conversationId: conv.id, message: inserted.message }, REVALIDATE, [
+    messageNotification(user, inserted, conv.id),
+  ]);
 }
 
 /** Mevcut sohbete mesaj ekle (yalnızca katılımcı). */
@@ -110,10 +144,12 @@ export async function sendMessage(
     return fail("validation", parsedText.error.issues[0]?.message ?? "Mesaj geçersiz.");
   }
 
-  const message = await insertMessage(conversationId, user.id, parsedText.data);
-  if (!message) return fail("not_found", "Sohbet bulunamadı veya yetkiniz yok.");
+  const inserted = await insertMessage(conversationId, user.id, parsedText.data);
+  if (!inserted) return fail("not_found", "Sohbet bulunamadı veya yetkiniz yok.");
 
-  return mutated({ message }, REVALIDATE);
+  return mutated({ message: inserted.message }, REVALIDATE, [
+    messageNotification(user, inserted, conversationId),
+  ]);
 }
 
 /**

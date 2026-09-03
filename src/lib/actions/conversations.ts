@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/conversations";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 import type { Message } from "../types";
 
 // İş mantığı src/lib/core/conversations.ts içinde.
@@ -15,7 +15,7 @@ export async function startConversationAction(
   const user = await verifySession();
   const res = await core.startConversation(user, listingId, text);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return { conversationId: res.value.conversationId };
 }
 
@@ -27,7 +27,7 @@ export async function sendMessageAction(
   const user = await verifySession();
   const res = await core.sendMessage(user, conversationId, text);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return { message: res.value.message };
 }
 
@@ -38,6 +38,6 @@ export async function markConversationReadAction(
   const user = await verifySession();
   const res = await core.markConversationRead(user, conversationId);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return {};
 }

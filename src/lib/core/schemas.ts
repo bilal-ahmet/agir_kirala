@@ -196,12 +196,3 @@ export const registerMediaSchema = z.object({
 export const toggleFavoriteSchema = z.object({
   listingId: z.string().uuid(),
 });
-
-export const deviceTokenSchema = z.object({
-  token: z.string().trim().min(20).max(4096),
-  platform: z.enum(["ios", "android"]),
-});
-
-export const deviceTokenDeleteSchema = z.object({
-  token: z.string().trim().min(1).max(4096),
-});

@@ -15,7 +15,6 @@ import {
   createListingSchema,
   createRentalRequestSchema,
   createReviewSchema,
-  deviceTokenSchema,
   forgotSchema,
   listingStatusBodySchema,
   loginBodySchema,
@@ -487,8 +486,6 @@ const ENDPOINTS: Endpoint[] = [
   { method: "get", path: "/users/{id}/reviews", id: "getUserReviews", summary: "Satıcıya yapılan yorumlar.", auth: false, params: ["id"], response: listOf(ref("Review")) },
   { method: "post", path: "/reviews", id: "createReview", summary: "Onaylanmış kiralamaya yorum.", auth: true, request: createReviewSchema, response: ref("CreatedId"), status: 201 },
 
-  { method: "post", path: "/device-tokens", id: "registerDeviceToken", summary: "Push cihaz token'ı kaydet (gönderim henüz yok).", auth: true, request: deviceTokenSchema, status: 204 },
-  { method: "delete", path: "/device-tokens", id: "deleteDeviceToken", summary: "Push cihaz token'ını sil.", auth: true, status: 204 },
 ];
 
 export function buildOpenApiDocument(): Json {

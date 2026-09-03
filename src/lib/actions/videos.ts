@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/uploads";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 
 // Video YÜKLEME burada değil: dosya istemciden doğrudan Supabase'e gider
 // (src/lib/core/uploads.ts + src/lib/upload-client.ts). Sebebi Vercel'deki
@@ -13,6 +13,6 @@ export async function deleteListingVideoAction(listingId: string): Promise<{ err
   const user = await verifySession();
   const res = await core.deleteListingVideo(user, listingId);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return {};
 }

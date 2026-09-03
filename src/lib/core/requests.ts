@@ -2,12 +2,13 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { rentalRequests } from "../db/schema";
+import { listings, rentalRequests } from "../db/schema";
 import { getListingById } from "../db/queries/listings";
 import { computeRentalTotal } from "../pricing";
 import type { RequestStatus, User } from "../types";
 import { fail, mutated, pgConstraint, type MutationResult } from "./errors";
 import { createRentalRequestSchema, updateRequestStatusSchema, type CreateRentalRequestInput } from "./schemas";
+import { preview, type Notification } from "../notify/types";
 
 const REVALIDATE = ["/hesap/taleplerim", "/hesap/gelen-talepler"];
 
@@ -65,7 +66,15 @@ export async function createRentalRequest(
       })
       .returning({ id: rentalRequests.id });
 
-    return mutated({ id: created.id }, REVALIDATE);
+    // İlan sahibi talebi kaçırmamalı: bildirim ona gider (talep eden zaten biliyor).
+    const notification: Notification = {
+      userId: listing.ownerId,
+      title: "Yeni kiralama talebi",
+      body: preview(`${user.name} · ${listing.title} · ${d.startDate} → ${d.endDate}`),
+      data: { type: "request_created", id: created.id, listingId: listing.id },
+    };
+
+    return mutated({ id: created.id }, REVALIDATE, [notification]);
   } catch (e) {
     /**
      * Idempotency: rental_requests_dedupe kısmi unique index'i ihlal edilirse
@@ -108,5 +117,36 @@ export async function updateRequestStatus(
     .set({ status, updatedAt: new Date() })
     .where(eq(rentalRequests.id, requestId));
 
-  return mutated({ id: requestId }, REVALIDATE);
+  // Bildirim her zaman KARŞI tarafa: onay/red kiralayana, iptal ilan sahibine.
+  const listing = await db.query.listings.findFirst({
+    where: eq(listings.id, req.listingId),
+    columns: { title: true },
+  });
+  const title = listing?.title ?? "İlan";
+
+  const copy: Record<typeof status & string, { userId: string; title: string; body: string }> = {
+    onaylandi: { userId: req.renterId, title: "Talebiniz onaylandı", body: title },
+    reddedildi: { userId: req.renterId, title: "Talebiniz reddedildi", body: title },
+    iptal: { userId: req.ownerId, title: "Talep iptal edildi", body: `${user.name} · ${title}` },
+    beklemede: { userId: req.renterId, title: "Talep güncellendi", body: title },
+  };
+  const c = copy[status];
+
+  const notification: Notification = {
+    userId: c.userId,
+    title: c.title,
+    body: preview(c.body),
+    data: {
+      type:
+        status === "onaylandi"
+          ? "request_approved"
+          : status === "reddedildi"
+            ? "request_rejected"
+            : "request_cancelled",
+      id: requestId,
+      listingId: req.listingId,
+    },
+  };
+
+  return mutated({ id: requestId }, REVALIDATE, [notification]);
 }

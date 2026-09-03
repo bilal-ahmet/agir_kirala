@@ -19,8 +19,6 @@ export {
   createListingSchema,
   createRentalRequestSchema,
   createReviewSchema,
-  deviceTokenDeleteSchema,
-  deviceTokenSchema,
   forgotSchema,
   listingStatusSchema,
   profileSchema,

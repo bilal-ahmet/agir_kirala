@@ -1,10 +1,11 @@
 import "server-only";
 
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AppError, collectFieldErrors, httpStatus, pgCode, type MutationResult } from "../core/errors";
 import { getCurrentUser, getSessionContext } from "../auth/session";
+import { sendNotifications } from "../notify/onesignal";
 import type { User } from "../types";
 
 /**
@@ -147,13 +148,18 @@ export async function parseJson<S extends z.ZodType>(
 }
 
 /**
- * Core mutasyon sonucunu HTTP'ye çevirir ve web cache'ini tazeler.
+ * Core mutasyon sonucunu HTTP'ye çevirir, web cache'ini tazeler ve push
+ * bildirimlerini kuyruğa alır.
  *
- * revalidatePath BURADA da çağrılır — yalnız server action'larda çağrılsaydı
- * mobilden eklenen bir ilan web'in /ilanlar sayfasında görünmezdi.
+ * Her ikisi de BURADA da yapılır — yalnız server action'larda yapılsaydı
+ * mobilden eklenen bir ilan web'de görünmez, mobilden atılan bir mesaj da
+ * karşı tarafa bildirim göndermezdi.
  */
 export function unwrap<T>(result: MutationResult<T>): T {
   if (!result.ok) throw result.error;
   for (const path of result.revalidate) revalidatePath(path);
+  // after(): yanıt döndükten sonra gönderilir; istemci OneSignal'i beklemez ve
+  // Vercel'de lambda donmadan önce işin bitmesi garanti altına alınır.
+  if (result.notify.length) after(() => sendNotifications(result.notify));
   return result.value;
 }

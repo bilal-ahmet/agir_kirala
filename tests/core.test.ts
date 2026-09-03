@@ -71,6 +71,19 @@ function value<T>(res: { ok: boolean }): T {
   return (res as unknown as { value: T }).value;
 }
 
+interface Notif {
+  userId: string;
+  title: string;
+  body: string;
+  data: { type: string; id: string; listingId?: string };
+}
+
+/** Mutasyonun urettigi push bildirimleri. */
+function notifs(res: { ok: boolean }): Notif[] {
+  expect(res.ok).toBe(true);
+  return (res as unknown as { notify: Notif[] }).notify;
+}
+
 let owner: User;
 let renter: User;
 
@@ -384,5 +397,107 @@ describe("hesap", () => {
 
     // İkinci kez silinemez.
     expectFail(await coreAccount.anonymizeAccount(victim.id), "conflict");
+  });
+});
+
+// ───────── Push bildirimleri ─────────
+//
+// Gonderim OneSignal'e ait; burada test edilen sey iş mantiginin urettigi
+// BILDIRIM NIYETI: dogru kisiye gidiyor mu, kendine gitmiyor mu, derin baglanti
+// verisi dolu mu. Yanlis aliciya bildirim, sessiz ve utanc verici bir hatadir.
+
+describe("bildirimler", () => {
+  it("mesaj bildirimi KARSI tarafa gider, gonderene degil", async () => {
+    const { id: listingId } = value<{ id: string }>(
+      await coreListings.createListing(owner, listingInput()),
+    );
+
+    const started = await coreConversations.startConversation(renter, listingId, "Merhaba");
+    const n1 = notifs(started);
+    expect(n1).toHaveLength(1);
+    expect(n1[0].userId).toBe(owner.id);
+    expect(n1[0].userId).not.toBe(renter.id);
+    expect(n1[0].title).toBe(renter.name);
+    expect(n1[0].data).toMatchObject({ type: "message", listingId });
+
+    // Ters yon: ilan sahibi yanitlayinca bildirim kiralayana gitmeli.
+    const { conversationId } = value<{ conversationId: string }>(started);
+    const replied = await coreConversations.sendMessage(owner, conversationId, "Musait.");
+    const n2 = notifs(replied);
+    expect(n2[0].userId).toBe(renter.id);
+    expect(n2[0].data.id).toBe(conversationId);
+  });
+
+  it("uzun mesaj bildirim govdesinde kirpilir", async () => {
+    const { id: listingId } = value<{ id: string }>(
+      await coreListings.createListing(owner, listingInput()),
+    );
+    const long = "x".repeat(500);
+    const res = await coreConversations.startConversation(renter, listingId, long);
+    expect(notifs(res)[0].body.length).toBeLessThanOrEqual(140);
+  });
+
+  it("talep bildirimi ilan sahibine gider", async () => {
+    const { id: listingId } = value<{ id: string }>(
+      await coreListings.createListing(owner, listingInput()),
+    );
+    const res = await coreRequests.createRentalRequest(renter, {
+      listingId,
+      startDate: "2027-03-01",
+      endDate: "2027-03-03",
+      period: "gunluk",
+    });
+    const n = notifs(res);
+    expect(n).toHaveLength(1);
+    expect(n[0].userId).toBe(owner.id);
+    expect(n[0].data.type).toBe("request_created");
+  });
+
+  it("onay bildirimi kiralayana, iptal bildirimi ilan sahibine gider", async () => {
+    const { id: listingId } = value<{ id: string }>(
+      await coreListings.createListing(owner, listingInput()),
+    );
+
+    const a = value<{ id: string }>(
+      await coreRequests.createRentalRequest(renter, {
+        listingId,
+        startDate: "2027-04-01",
+        endDate: "2027-04-03",
+        period: "gunluk",
+      }),
+    );
+    const approved = await coreRequests.updateRequestStatus(owner, a.id, "onaylandi");
+    expect(notifs(approved)[0].userId).toBe(renter.id);
+    expect(notifs(approved)[0].data.type).toBe("request_approved");
+
+    const b = value<{ id: string }>(
+      await coreRequests.createRentalRequest(renter, {
+        listingId,
+        startDate: "2027-05-01",
+        endDate: "2027-05-03",
+        period: "gunluk",
+      }),
+    );
+    const cancelled = await coreRequests.updateRequestStatus(renter, b.id, "iptal");
+    expect(notifs(cancelled)[0].userId).toBe(owner.id);
+    expect(notifs(cancelled)[0].data.type).toBe("request_cancelled");
+  });
+
+  it("bildirim verisindeki tum degerler string (OneSignal data sozlesmesi)", async () => {
+    const { id: listingId } = value<{ id: string }>(
+      await coreListings.createListing(owner, listingInput()),
+    );
+    const res = await coreConversations.startConversation(renter, listingId, "veri tipi kontrolu");
+    for (const [key, v] of Object.entries(notifs(res)[0].data)) {
+      expect(typeof v, `data.${key} string degil`).toBe("string");
+    }
+  });
+
+  it("bildirim uretmeyen mutasyonlar bos dizi doner", async () => {
+    const { id } = value<{ id: string }>(
+      await coreListings.createListing(owner, listingInput()),
+    );
+    expect(notifs(await coreFavorites.toggleFavorite(renter, id))).toEqual([]);
+    expect(notifs(await coreListings.updateListingStatus(owner, id, "pasif"))).toEqual([]);
   });
 });

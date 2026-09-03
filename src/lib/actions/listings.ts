@@ -2,7 +2,7 @@
 
 import { verifySession } from "../auth/session";
 import * as core from "../core/listings";
-import { applyRevalidation } from "./wrap";
+import { applyEffects } from "./wrap";
 import type { ListingStatus } from "../types";
 import type { CreateListingInput, UpdateListingInput } from "../core/schemas";
 
@@ -23,7 +23,7 @@ export async function createListingAction(
   const user = await verifySession();
   const res = await core.createListing(user, input);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return { id: res.value.id };
 }
 
@@ -34,7 +34,7 @@ export async function updateListingAction(
   const user = await verifySession();
   const res = await core.updateListing(user, listingId, input);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return {};
 }
 
@@ -45,7 +45,7 @@ export async function updateListingStatusAction(
   const user = await verifySession();
   const res = await core.updateListingStatus(user, listingId, status);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return {};
 }
 
@@ -53,6 +53,6 @@ export async function deleteListingAction(listingId: string): Promise<{ error?: 
   const user = await verifySession();
   const res = await core.deleteListing(user, listingId);
   if (!res.ok) return { error: res.error.message };
-  applyRevalidation(res.revalidate);
+  applyEffects(res);
   return {};
 }

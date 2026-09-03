@@ -119,8 +119,54 @@ filtrelerinin **hepsi** açık parametre olarak tanımlı (enum'lar dahil), tek 
 dinamik `spec_*`. Alt nesneler (`Photo`, `PriceMap`, `SpecMap`, `Availability`,
 `Message`, `SignedTarget`) `$ref` ile bağlı — anonim sınıf üretilmez.
 
-## Henüz yok
+## Push bildirimleri (OneSignal)
 
-Push bildirim **gönderimi** (FCM/APNs). `device_tokens` tablosu ve
-`POST/DELETE /device-tokens` uçları hazır ama tetikleyici yok. O gelene kadar
-mobil `GET /me/badges` ile polling yapar.
+Adresleme **External ID** iledir; backend cihaz token'ı saklamaz. Bu yüzden
+`device_tokens` tablosu ve `/device-tokens` uçları kaldırıldı — abonelikleri,
+fan-out'u, tekrar denemeyi ve ölü token temizliğini OneSignal yönetiyor.
+
+**Flutter tarafında gereken tek şey:**
+
+```dart
+OneSignal.initialize(ONESIGNAL_APP_ID);
+await OneSignal.Notifications.requestPermission(true);
+await OneSignal.login(user.id);   // giriş sonrası — External ID
+await OneSignal.logout();         // çıkış / hesap silme sonrası
+```
+
+`OneSignal.login()` çağrılmazsa bildirim gitmez: backend kullanıcı id'siyle
+hedefliyor ve OneSignal o id'yi tanımıyor.
+
+**Env:** `ONESIGNAL_APP_ID`, `ONESIGNAL_API_KEY` (REST API Key — gizli).
+Tanımlı değilse bildirim sessizce atlanır; geliştirme ve testler etkilenmez.
+
+### Tetikleyiciler
+
+| Olay | Alıcı | `data.type` | `data.id` |
+|---|---|---|---|
+| Yeni mesaj | karşı katılımcı | `message` | sohbet id |
+| Yeni kiralama talebi | ilan sahibi | `request_created` | talep id |
+| Talep onaylandı | kiralayan | `request_approved` | talep id |
+| Talep reddedildi | kiralayan | `request_rejected` | talep id |
+| Talep iptal edildi | ilan sahibi | `request_cancelled` | talep id |
+| Yeni değerlendirme | ilan sahibi | `review_created` | yorum id |
+
+Bildirim **hiçbir zaman eylemi yapana gitmez.** `data` içindeki her değer
+STRING'dir (OneSignal sözleşmesi) ve `listingId` de taşınır — derin bağlantı
+için yeterli.
+
+### Mimari
+
+Core `next/server`'ı import edemez (testler ve taşıma-bağımsızlığı buna dayalı),
+o yüzden `revalidate` ile aynı bölünme kullanılır:
+
+```
+core mutasyonu → MutationResult { value, revalidate, notify }
+                                                      ↓
+                action sarmalayıcı / withApi → after() içinde gönderilir
+```
+
+`after()` şart: Vercel'de yanıttan sonra başlatılan ateşle-unut bir iş, lambda
+donduğu için tamamlanmayabilir. Beklemek de yanlış olurdu — mesaj zaten
+kaydedildi, kullanıcı OneSignal'i beklememeli. Gönderim hataları loglanır ve
+yutulur; bildirim gidemedi diye mutasyon başarısız sayılmaz.
