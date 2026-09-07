@@ -6,7 +6,7 @@ import { conversations, listings, messages } from "../db/schema";
 import type { Message, User } from "../types";
 import { fail, mutated, type MutationResult } from "./errors";
 import { messageTextSchema } from "./schemas";
-import { preview, type Notification } from "../notify/types";
+import { notificationData, preview, type Notification } from "../notify/types";
 
 const REVALIDATE = ["/hesap/mesajlar"];
 
@@ -85,7 +85,7 @@ function messageNotification(
     userId: inserted.recipientId,
     title: sender.name,
     body: preview(inserted.message.text),
-    data: { type: "message", id: conversationId, listingId: inserted.listingId },
+    data: notificationData("message", conversationId, inserted.listingId),
   };
 }
 

@@ -75,7 +75,7 @@ interface Notif {
   userId: string;
   title: string;
   body: string;
-  data: { type: string; id: string; listingId?: string };
+  data: { type: string; id: string; listingId?: string; route: string };
 }
 
 /** Mutasyonun urettigi push bildirimleri. */
@@ -419,6 +419,8 @@ describe("bildirimler", () => {
     expect(n1[0].userId).not.toBe(renter.id);
     expect(n1[0].title).toBe(renter.name);
     expect(n1[0].data).toMatchObject({ type: "message", listingId });
+    // Derin baglanti: dokununca DOGRU sohbet acilmali.
+    expect(n1[0].data.route).toBe(`/mesajlar/${value<{ conversationId: string }>(started).conversationId}`);
 
     // Ters yon: ilan sahibi yanitlayinca bildirim kiralayana gitmeli.
     const { conversationId } = value<{ conversationId: string }>(started);
@@ -451,6 +453,7 @@ describe("bildirimler", () => {
     expect(n).toHaveLength(1);
     expect(n[0].userId).toBe(owner.id);
     expect(n[0].data.type).toBe("request_created");
+    expect(n[0].data.route).toBe("/gelen-talepler");
   });
 
   it("onay bildirimi kiralayana, iptal bildirimi ilan sahibine gider", async () => {
@@ -469,6 +472,8 @@ describe("bildirimler", () => {
     const approved = await coreRequests.updateRequestStatus(owner, a.id, "onaylandi");
     expect(notifs(approved)[0].userId).toBe(renter.id);
     expect(notifs(approved)[0].data.type).toBe("request_approved");
+    // Onay kiralayani ilgilendirir -> kendi talepleri
+    expect(notifs(approved)[0].data.route).toBe("/taleplerim");
 
     const b = value<{ id: string }>(
       await coreRequests.createRentalRequest(renter, {
@@ -481,6 +486,8 @@ describe("bildirimler", () => {
     const cancelled = await coreRequests.updateRequestStatus(renter, b.id, "iptal");
     expect(notifs(cancelled)[0].userId).toBe(owner.id);
     expect(notifs(cancelled)[0].data.type).toBe("request_cancelled");
+    // Iptal ilan sahibini ilgilendirir -> gelen talepler
+    expect(notifs(cancelled)[0].data.route).toBe("/gelen-talepler");
   });
 
   it("bildirim verisindeki tum degerler string (OneSignal data sozlesmesi)", async () => {
@@ -490,6 +497,32 @@ describe("bildirimler", () => {
     const res = await coreConversations.startConversation(renter, listingId, "veri tipi kontrolu");
     for (const [key, v] of Object.entries(notifs(res)[0].data)) {
       expect(typeof v, `data.${key} string degil`).toBe("string");
+    }
+  });
+
+  it("her bildirimde route DOLU (dokununca hicbir sey olmamasi sessiz hatadir)", async () => {
+    const { id: listingId } = value<{ id: string }>(
+      await coreListings.createListing(owner, listingInput()),
+    );
+
+    const all: Notif[] = [];
+    all.push(...notifs(await coreConversations.startConversation(renter, listingId, "selam")));
+    const req = value<{ id: string }>(
+      await coreRequests.createRentalRequest(renter, {
+        listingId,
+        startDate: "2027-07-01",
+        endDate: "2027-07-03",
+        period: "gunluk",
+      }),
+    );
+    all.push(...notifs(await coreRequests.updateRequestStatus(owner, req.id, "reddedildi")));
+
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    for (const n of all) {
+      expect(n.data.route, `${n.data.type} icin route bos`).toBeTruthy();
+      expect(n.data.route.startsWith("/"), `${n.data.type} rotasi goreli degil`).toBe(true);
+      // Mutlak URL GONDERILMEZ: payload uretim alan adina baglanmamali.
+      expect(n.data.route).not.toContain("http");
     }
   });
 

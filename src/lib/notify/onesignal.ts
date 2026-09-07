@@ -42,6 +42,18 @@ async function send(notification: Notification, appId: string, apiKey: string): 
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
+    // NOTIFY_DEBUG=1 ile gönderilen yükü loglar. Gerçek cihazda "bildirim geldi
+    // ama yanlış ekrana gitti" hatasını ayıklamanın en hızlı yolu bu satır.
+    if (process.env.NOTIFY_DEBUG === "1") {
+      console.log(
+        "[notify-debug]",
+        JSON.stringify({
+          userId: notification.userId,
+          title: notification.title,
+          data: notification.data,
+        }),
+      );
+    }
     const res = await fetch(ENDPOINT, {
       method: "POST",
       headers: {

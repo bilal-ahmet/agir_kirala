@@ -152,8 +152,29 @@ Tanımlı değilse bildirim sessizce atlanır; geliştirme ve testler etkilenmez
 | Yeni değerlendirme | ilan sahibi | `review_created` | yorum id |
 
 Bildirim **hiçbir zaman eylemi yapana gitmez.** `data` içindeki her değer
-STRING'dir (OneSignal sözleşmesi) ve `listingId` de taşınır — derin bağlantı
-için yeterli.
+STRING'dir (OneSignal sözleşmesi).
+
+### Derin bağlantı: `data.route`
+
+`data.route` uygulama içi GÖRELİ yoldur; mutlak URL gönderilmez. URL, payload'ı
+üretim alan adına bağlardı (alan adı değişince eski bildirimler kırılırdı) ve
+universal link eşleşmesi eksikse uygulama yerine tarayıcı açılma riski taşırdı.
+
+| `type` | `route` |
+|---|---|
+| `message` | `/mesajlar/{conversationId}` |
+| `request_created` · `request_cancelled` | `/gelen-talepler` |
+| `request_approved` · `request_rejected` | `/taleplerim` |
+| `review_created` | `/ilanlar/{listingId}` |
+
+**İstemci tanımadığı bir yol görürse ana sayfaya düşmelidir.** Böylece ileride
+yeni bir bildirim türü eklendiğinde eski uygulama sürümleri bildirimi yutmaz.
+
+Yol adları Flutter router'ıyla eşleşmiyorsa değiştirilecek TEK yer
+`src/lib/notify/types.ts` → `routeFor()`. Başka hiçbir yerde yol dizesi üretilmez.
+
+Hata ayıklama: `NOTIFY_DEBUG=1` ile sunucu, gönderdiği her yükü
+`[notify-debug]` satırı olarak loglar.
 
 ### Mimari
 

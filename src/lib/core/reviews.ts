@@ -7,7 +7,7 @@ import { recomputeUserRating } from "../db/queries/reviews";
 import type { User } from "../types";
 import { fail, mutated, type MutationResult } from "./errors";
 import { createReviewSchema, type CreateReviewInput } from "./schemas";
-import { preview, type Notification } from "../notify/types";
+import { notificationData, preview, type Notification } from "../notify/types";
 
 /** Onaylanmış kiralamanın kiralayanı, ilan sahibine yorum bırakır. */
 export async function createReview(
@@ -55,7 +55,7 @@ export async function createReview(
     body: preview(
       `${user.name} ${d.rating} yıldız verdi${d.comment ? ` · ${d.comment}` : ""}`,
     ),
-    data: { type: "review_created", id: created.id, listingId: req.listingId },
+    data: notificationData("review_created", created.id, req.listingId),
   };
 
   return mutated(

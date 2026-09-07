@@ -8,7 +8,7 @@ import { computeRentalTotal } from "../pricing";
 import type { RequestStatus, User } from "../types";
 import { fail, mutated, pgConstraint, type MutationResult } from "./errors";
 import { createRentalRequestSchema, updateRequestStatusSchema, type CreateRentalRequestInput } from "./schemas";
-import { preview, type Notification } from "../notify/types";
+import { notificationData, preview, type Notification } from "../notify/types";
 
 const REVALIDATE = ["/hesap/taleplerim", "/hesap/gelen-talepler"];
 
@@ -71,7 +71,7 @@ export async function createRentalRequest(
       userId: listing.ownerId,
       title: "Yeni kiralama talebi",
       body: preview(`${user.name} · ${listing.title} · ${d.startDate} → ${d.endDate}`),
-      data: { type: "request_created", id: created.id, listingId: listing.id },
+      data: notificationData("request_created", created.id, listing.id),
     };
 
     return mutated({ id: created.id }, REVALIDATE, [notification]);
@@ -136,16 +136,15 @@ export async function updateRequestStatus(
     userId: c.userId,
     title: c.title,
     body: preview(c.body),
-    data: {
-      type:
-        status === "onaylandi"
-          ? "request_approved"
-          : status === "reddedildi"
-            ? "request_rejected"
-            : "request_cancelled",
-      id: requestId,
-      listingId: req.listingId,
-    },
+    data: notificationData(
+      status === "onaylandi"
+        ? "request_approved"
+        : status === "reddedildi"
+          ? "request_rejected"
+          : "request_cancelled",
+      requestId,
+      req.listingId,
+    ),
   };
 
   return mutated({ id: requestId }, REVALIDATE, [notification]);

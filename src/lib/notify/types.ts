@@ -26,6 +26,61 @@ export interface NotificationData {
   /** Açılacak ekranın kimliği: sohbet id'si, talep id'si veya ilan id'si. */
   id: string;
   listingId?: string;
+  /**
+   * Bildirime dokununca gidilecek UYGULAMA İÇİ yol.
+   *
+   * Mutlak URL yerine göreli yol gönderiliyor: URL, payload'ı üretim alan adına
+   * bağlardı (alan adı değişince eski bildirimler kırılırdı) ve universal link
+   * eşleşmesi eksikse uygulama yerine tarayıcı açılma riski taşırdı.
+   *
+   * İstemci tanımadığı bir yol görürse ana sayfaya düşmelidir — böylece yeni bir
+   * bildirim türü eklendiğinde eski uygulama sürümleri bildirimi yutmaz.
+   */
+  route: string;
+}
+
+/**
+ * Bildirim türü → uygulama içi yol.
+ *
+ * TEK eşleme tablosu. Flutter'ın router'ındaki adlar farklıysa değiştirilecek
+ * yer burasıdır; başka hiçbir yerde yol dizesi üretilmez.
+ */
+export function routeFor(kind: NotificationKind, id: string, listingId?: string): string {
+  switch (kind) {
+    case "message":
+      // id = sohbet id'si
+      return `/mesajlar/${id}`;
+    case "request_created":
+    case "request_cancelled":
+      // İlan sahibini ilgilendirir → gelen talepler
+      return "/gelen-talepler";
+    case "request_approved":
+    case "request_rejected":
+      // Kiralayanı ilgilendirir → kendi talepleri
+      return "/taleplerim";
+    case "review_created":
+      return listingId ? `/ilanlar/${listingId}` : "/";
+  }
+}
+
+/**
+ * Bildirim verisini kurar — `route` otomatik türetilir.
+ *
+ * Çağrı yerlerinin `route`'u elle yazmasına izin verilmez: unutulan tek bir yer
+ * bildirimi "dokununca hiçbir şey olmuyor" durumuna düşürürdü ve bu sessiz bir
+ * hatadır.
+ */
+export function notificationData(
+  type: NotificationKind,
+  id: string,
+  listingId?: string,
+): NotificationData {
+  return {
+    type,
+    id,
+    ...(listingId ? { listingId } : {}),
+    route: routeFor(type, id, listingId),
+  };
 }
 
 export interface Notification {
