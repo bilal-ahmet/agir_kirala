@@ -9,7 +9,8 @@ import { createListingAction } from "@/lib/actions/listings";
 // tip re-export edemez (calisma aninda ReferenceError).
 import type { CreateListingInput } from "@/lib/core/schemas";
 import { uploadListingMedia } from "@/lib/upload-client";
-import { CATEGORIES, getCategory } from "@/lib/categories";
+import { CATEGORIES, getCategory, operatorLabel, specFieldsFor, transportApplies } from "@/lib/categories";
+import { publishPriceError } from "@/lib/pricing";
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
@@ -125,21 +126,32 @@ export default function IlanEklePage() {
   const parsedPrices = useMemo<PriceMap>(() => {
     const out: PriceMap = {};
     for (const p of LISTING_PERIODS) {
+      if (p.value === "sefer" && !getCategory(form.categorySlug)?.tripPricing) continue;
       const v = form.prices[p.value];
       if (v && Number(v) > 0) out[p.value] = Number(v);
     }
     return out;
-  }, [form.prices]);
+  }, [form.prices, form.categorySlug]);
+
+  // Alt kategoriye özel alanlar (ör. lowbed'in rampa tipi) yalnız o alt
+  // kategoride gösterilir ve kaydedilir; alt kategori değişince eski
+  // değerler sessizce düşer.
+  const specFields = useMemo(
+    () => specFieldsFor(form.categorySlug, form.subCategorySlug),
+    [form.categorySlug, form.subCategorySlug],
+  );
+  const hasTransport = transportApplies(form.categorySlug);
+  const listingPeriods = LISTING_PERIODS.filter((p) => p.value !== "sefer" || category?.tripPricing);
 
   const parsedSpecs = useMemo<Record<string, SpecVal>>(() => {
     const out: Record<string, SpecVal> = {};
-    for (const field of category?.specFields ?? []) {
+    for (const field of specFields) {
       const v = form.specs[field.key];
       if (v === undefined || v === "") continue;
       out[field.key] = field.type === "number" ? Number(v) : v;
     }
     return out;
-  }, [form.specs, category]);
+  }, [form.specs, specFields]);
 
   // Profilinde telefon olmayan kullanıcı telefonlu iletişim seçemez.
   const hasPhone = !!user?.phone?.trim();
@@ -300,17 +312,11 @@ export default function IlanEklePage() {
 
   const saveDraft = () => submitListing("taslak");
 
-  // Yayın için zorunlu fiyat alanı (saatlik)
-  const missingPrices = (): string[] => {
-    const m: string[] = [];
-    if (!parsedPrices.saatlik) m.push("Saatlik Ücret");
-    return m;
-  };
-
   const publish = () => {
-    const m = missingPrices();
-    if (m.length > 0) {
-      setError(`Yayınlamak için zorunlu alanlar: ${m.join(", ")}.`);
+    // Sunucuyla aynı kural (makinede saatlik, tırda en az bir fiyat).
+    const priceError = publishPriceError(form.categorySlug, parsedPrices);
+    if (priceError) {
+      setError(priceError);
       setPreviewing(false);
       setStep(3);
       return;
@@ -445,7 +451,15 @@ export default function IlanEklePage() {
             <Field label="Kategori" required>
               <Select
                 value={form.categorySlug}
-                onChange={(e) => set({ categorySlug: e.target.value, subCategorySlug: "", brand: "", specs: {} })}
+                onChange={(e) =>
+                  set({
+                    categorySlug: e.target.value,
+                    subCategorySlug: "",
+                    brand: "",
+                    specs: {},
+                    ...(transportApplies(e.target.value) ? {} : { transport: "yok" as TransportOption }),
+                  })
+                }
               >
                 <option value="">Seçin</option>
                 {CATEGORIES.map((c) => (
@@ -533,12 +547,13 @@ export default function IlanEklePage() {
         {step === 2 && category && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Operatör">
+              <Field label={category.operatorLabels ? "Şoför" : "Operatör"}>
                 <Select value={form.operator ? "1" : "0"} onChange={(e) => set({ operator: e.target.value === "1" })}>
-                  <option value="0">Operatörsüz</option>
-                  <option value="1">Operatörlü</option>
+                  <option value="0">{operatorLabel(category.slug, false)}</option>
+                  <option value="1">{operatorLabel(category.slug, true)}</option>
                 </Select>
               </Field>
+              {hasTransport && (
               <Field label="Nakliye" hint="Makineyi siz mi taşıyorsunuz?">
                 <Select
                   value={form.transport}
@@ -549,6 +564,7 @@ export default function IlanEklePage() {
                   <option value="ekstra">Nakliye Var — Ayrıca Ücretli</option>
                 </Select>
               </Field>
+              )}
               <Field label="Durum" required>
                 <Select
                   value={form.condition}
@@ -582,7 +598,7 @@ export default function IlanEklePage() {
                 {category.name} Teknik Özellikleri
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                {category.specFields.map((field) => (
+                {specFields.map((field) => (
                   <Field key={field.key} label={`${field.label}${field.unit ? ` (${field.unit})` : ""}`}>
                     {field.type === "select" ? (
                       <Select
@@ -633,11 +649,13 @@ export default function IlanEklePage() {
             <div>
               <Label required>Fiyatlandırma (₺)</Label>
               <p className="mb-2 -mt-1 text-xs text-faint">
-                Saatlik ücret zorunludur. Günlük/haftalık/aylık/yıllık opsiyoneldir.
+                {category?.tripPricing
+                  ? "En az bir fiyat girin. Nakliye işleri için sefer başı fiyat önerilir."
+                  : "Saatlik ücret zorunludur. Günlük/haftalık/aylık/yıllık opsiyoneldir."}
               </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {LISTING_PERIODS.map((p) => {
-                  const req = p.value === "saatlik";
+                {listingPeriods.map((p) => {
+                  const req = !category?.tripPricing && p.value === "saatlik";
                   return (
                     <Field key={p.value} label={p.label} required={req}>
                       <Input
@@ -791,9 +809,9 @@ export default function IlanEklePage() {
               </Button>
               <Button
                 onClick={() => {
-                  const m = missingPrices();
-                  if (m.length > 0) {
-                    setError(`Yayınlamak için zorunlu alanlar: ${m.join(", ")}.`);
+                  const priceError = publishPriceError(form.categorySlug, parsedPrices);
+                  if (priceError) {
+                    setError(priceError);
                     return;
                   }
                   setError(null);

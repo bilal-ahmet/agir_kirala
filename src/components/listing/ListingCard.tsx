@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
-import { getCategory } from "@/lib/categories";
+import { getCategory, operatorLabel } from "@/lib/categories";
 import { PERIODS } from "@/lib/constants";
 import { formatPrice, formatUsage, primaryPrice } from "@/lib/format";
 import { ListingImage } from "./ListingImage";
@@ -41,7 +41,7 @@ export function ListingCard({
           {listing.featured && <Badge tone="accent">⭐ Öne Çıkan</Badge>}
           {listing.videoUrl && <Badge tone="info">▶ Videolu</Badge>}
           <Badge tone={listing.operator ? "info" : "neutral"}>
-            {listing.operator ? "Operatörlü" : "Operatörsüz"}
+            {operatorLabel(listing.categorySlug, listing.operator)}
           </Badge>
         </div>
         <FavoriteButton id={listing.id} className="absolute right-2.5 top-2.5 z-10" />

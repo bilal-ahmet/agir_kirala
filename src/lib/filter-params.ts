@@ -69,7 +69,7 @@ const OWNER_TYPES = ["bireysel", "kurumsal"] as const;
 const CONDITIONS = ["sifir", "ikinci_el"] as const;
 const TRANSPORTS = ["var", "yok"] as const;
 const OPERATORS = ["operatorlu", "operatorsuz"] as const;
-const RENTAL_PERIODS = ["saatlik", "gunluk", "haftalik", "aylik", "yillik"] as const;
+const RENTAL_PERIODS = ["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sefer"] as const;
 
 /** searchParams nesnesini FilterState'e çevirir. */
 export function parseFilters(params: RawParams): FilterState {

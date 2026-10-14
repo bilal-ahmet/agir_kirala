@@ -42,7 +42,20 @@ const SYNONYMS: Record<string, string[]> = {
   "damperli-kamyon/kirkayak": ["kirkayak", "kirk ayak", "8x4"],
   "damperli-kamyon/belden-kirma": ["belden kirma", "belden kirmali", "dumper"],
   "damperli-kamyon/mini": ["mini damper", "mini kamyon", "mini damperli"],
-  "damperli-kamyon/lowbed-cekici": ["lowbed", "low bed", "lobet", "lobed", "dorse"],
+
+  // Tır. "Çekici" alt kategori adından otomatik gelir (Çekici (Dorsesiz)).
+  // Tek başına "sal" eklenmedi: "salı" (gün) kökü de "sal"a iner.
+  tir: ["tir", "tir kiralama", "dorse", "treyler", "yari romork"],
+  "tir/tenteli": ["tenteli", "perdeli", "tenteli dorse", "perdeli dorse", "kuru yuk"],
+  "tir/kapali-kasa": ["kapali kasa", "box", "kutu kasa", "kapali dorse"],
+  "tir/frigorifik": ["frigo", "frigorifik", "sogutuculu", "sogutmali", "frigo dorse"],
+  "tir/acik-kasa": ["acik kasa", "sal dorse", "sal tir", "platform dorse", "acik dorse"],
+  "tir/lowbed": ["lowbed", "low bed", "lobet", "lobed", "lowbed dorse", "agir nakliye", "agir yuk"],
+  "tir/damperli": ["damperli dorse", "damper dorse"],
+  "tir/silobas": ["silobas", "silo", "silobas dorse"],
+  "tir/tanker": ["tanker", "akaryakit tankeri", "yakit tankeri", "tanker dorse"],
+  "tir/konteyner": ["konteyner", "konteyner tasiyici", "konteyner sasi", "sasi dorse"],
+  "tir/oto-tasiyici": ["oto tasiyici", "arac tasiyici", "oto tasima", "arac tasima"],
 
   beton: ["beton", "beton makine", "beton pompasi", "beton pompa"],
   "beton/beton-mikseri": ["mikser", "beton mikseri", "transmikser", "betoniyer"],

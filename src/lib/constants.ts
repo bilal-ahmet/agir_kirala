@@ -15,6 +15,7 @@ export const PERIODS: { value: RentalPeriod; label: string; short: string }[] = 
   { value: "haftalik", label: "Haftalık", short: "hafta" },
   { value: "aylik", label: "Aylık", short: "ay" },
   { value: "yillik", label: "Yıllık", short: "yıl" },
+  { value: "sefer", label: "Sefer Başı", short: "sefer" },
 ];
 
 /** İlan ekleme formunda sunulan fiyatlandırma periyotları: saat / gün / ay / yıl */
@@ -23,6 +24,8 @@ export const LISTING_PERIODS: { value: RentalPeriod; label: string; short: strin
   { value: "gunluk", label: "Günlük", short: "gün" },
   { value: "aylik", label: "Aylık", short: "ay" },
   { value: "yillik", label: "Yıllık", short: "yıl" },
+  // Yalnız sefer fiyatlı kategorilerde (tır) gösterilir — bkz. Category.tripPricing.
+  { value: "sefer", label: "Sefer Başı", short: "sefer" },
 ];
 
 export const PERIOD_LABELS: Record<RentalPeriod, string> = {
@@ -31,6 +34,7 @@ export const PERIOD_LABELS: Record<RentalPeriod, string> = {
   haftalik: "Haftalık",
   aylik: "Aylık",
   yillik: "Yıllık",
+  sefer: "Sefer Başı",
 };
 
 /** Bir periyodun yaklaşık gün karşılığı (toplam tutar tahmini için) */
@@ -40,6 +44,8 @@ export const PERIOD_IN_DAYS: Record<RentalPeriod, number> = {
   haftalik: 7,
   aylik: 30,
   yillik: 365,
+  // Bir sefer tipik olarak bir günlük iştir.
+  sefer: 1,
 };
 
 export const FUEL_LABELS: Record<FuelType, string> = {

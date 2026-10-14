@@ -2,7 +2,8 @@
 // Bu katman ileride gerçek API/DB ile değiştirilebilir; UI yalnızca bu tiplere bağlıdır.
 
 /** Kiralama fiyatlandırma periyodu */
-export type RentalPeriod = "saatlik" | "gunluk" | "haftalik" | "aylik" | "yillik";
+/** "sefer": tek seferlik taşıma (tır). Bir talep = bir sefer. */
+export type RentalPeriod = "saatlik" | "gunluk" | "haftalik" | "aylik" | "yillik" | "sefer";
 
 /** İlan sahibi tipi */
 export type OwnerType = "bireysel" | "kurumsal";
@@ -47,11 +48,21 @@ export interface SpecField {
   filterable?: boolean;
   /** number alanlar için filtre kademe değerleri (örn. min seçici) */
   steps?: number[];
+  /**
+   * Alan yalnız bu alt kategorilerde anlamlıdır (ör. lowbed'in platform
+   * yüksekliği tenteli tırda gösterilmez). Tanımsızsa tüm alt kategoriler.
+   */
+  subcategories?: string[];
 }
 
 export interface SubCategory {
   slug: string;
   name: string;
+  /**
+   * Kendi başına yola çıkabilen araç (mobil vinç, transmikser…). Bunlar için
+   * "nakliye için tır" önerisi gösterilmez.
+   */
+  selfDriving?: boolean;
 }
 
 export interface Category {
@@ -64,6 +75,14 @@ export interface Category {
   specFields: SpecField[];
   /** Bu kategoride çalışma ölçüsü saat (motosaat) mi yoksa km mi */
   usageMetric: "saat" | "km";
+  /** Operatör alanının bu kategorideki adı (tırda "Şoförlü/Şoförsüz"). */
+  operatorLabels?: { yes: string; no: string };
+  /** false → "nakliye dahil/ekstra" alanı anlamsız (aracın kendisi nakliye aracı). */
+  transportApplicable?: boolean;
+  /** true → ilan formunda "Sefer Başı" fiyatı sunulur. */
+  tripPricing?: boolean;
+  /** true → bu kategorideki makineler için ilan detayında nakliye (tır) önerilir. */
+  needsHauling?: boolean;
 }
 
 export interface User {

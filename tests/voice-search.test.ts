@@ -330,3 +330,37 @@ describe("LLM yedeği", () => {
     expect(m.q).toBe("3CX");
   });
 });
+
+describe("tır", () => {
+  it("il + dorse tipi", () => {
+    expect(params("İstanbul'da lowbed")).toEqual({ il: "İstanbul", kategori: "tir", altKategori: "lowbed" });
+    expect(params("frigorifik tır İzmir")).toMatchObject({ kategori: "tir", altKategori: "frigorifik", il: "İzmir" });
+  });
+
+  it("şoförlü + sefer başı", () => {
+    expect(params("şoförlü tenteli tır sefer başı")).toEqual({
+      operator: "operatorlu",
+      kategori: "tir",
+      altKategori: "tenteli",
+      periyot: "sefer",
+    });
+  });
+
+  it("tonaj lowbed'in taşıma kapasitesine bağlanır", () => {
+    expect(params("60 tonluk lowbed")).toMatchObject({ altKategori: "lowbed", spec_tasimaKapasitesi: "60" });
+  });
+
+  it("çekici ve marka", () => {
+    expect(params("Scania çekici")).toEqual({ marka: "Scania", kategori: "tir", altKategori: "cekici" });
+  });
+
+  it("'nakliye için tır' tır aramasını nakliye filtresiyle boşaltmaz", async () => {
+    const res = await parseVoiceQuery({ text: "ekskavatör nakliyesi için tır lazım Kocaeli" }, { llm: false });
+    if (!res.ok) throw res.error;
+    expect(res.value.params.nakliye).toBeUndefined();
+  });
+
+  it("'salı' günü açık kasa sayılmaz", () => {
+    expect(params("salı günü kepçe")).not.toMatchObject({ kategori: "tir" });
+  });
+});

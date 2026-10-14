@@ -8,6 +8,7 @@
 // Diziler "yerli önce, sonra yaygınlık sırası" mantığıyla elle düzenlenmiştir.
 
 import { getCategory } from "./categories";
+import { TRUCK_BRANDS, TURKISH_TRAILER_BRANDS } from "./truck-brands";
 
 /** Yerli (Türk) üretici markalar — UI'da "Yerli" rozeti ve sıralama için. */
 export const TURKISH_BRANDS = new Set<string>([
@@ -24,12 +25,19 @@ export const TURKISH_BRANDS = new Set<string>([
   "Aksa", "Teksan", "Emsa", "Gücbir", "Aksan", "Dizelsan", "Genpower",
   // Kompresör
   "Dalgakıran", "Ekomak", "Özen Kompresör",
+  // Dorse / treyler (tır)
+  ...TURKISH_TRAILER_BRANDS,
 ]);
 
 /**
  * Alt kategori (subcategory slug) → o makine tipini üreten markalar.
  * Yerli markalar başa, ardından küresel/yaygın markalar.
  */
+/** Çekici markaları + verilen dorse markaları (tır alt kategorileri için). */
+function withTrucks(...trailerBrands: string[]): string[] {
+  return [...TRUCK_BRANDS, ...trailerBrands];
+}
+
 export const SUBCATEGORY_BRANDS: Record<string, string[]> = {
   // ───────────────────────── HAFRİYAT MAKİNELERİ ─────────────────────────
   "beko-loder": [
@@ -88,12 +96,6 @@ export const SUBCATEGORY_BRANDS: Record<string, string[]> = {
     "BMC", "Ford Trucks",
     "Isuzu", "Mitsubishi Fuso", "Hyundai", "JAC", "Iveco", "Wacker Neuson",
     "Ausa", "Hinowa", "Messersì", "Cormidi", "Yanmar",
-  ],
-  "lowbed-cekici": [
-    "Ford Trucks", "BMC", "Tırsan", "Kässbohrer", "Özsan Treyler",
-    "Serin Treyler", "Global Treyler", "Alim Treyler",
-    "Mercedes-Benz", "MAN", "Scania", "Volvo", "DAF", "Iveco", "Renault Trucks",
-    "Nooteboom", "Goldhofer", "Faymonville", "Broshuis", "Schmitz Cargobull", "Krone",
   ],
 
   // ───────────────────────── BETON MAKİNELERİ ─────────────────────────
@@ -314,6 +316,63 @@ export const SUBCATEGORY_BRANDS: Record<string, string[]> = {
     "Atlas Copco", "Ingersoll Rand", "Kaeser", "Sullair", "Doosan",
     "CompAir", "Chicago Pneumatic", "Boge", "Gardner Denver", "Fini", "ELGi",
   ],
+
+  // ───────────────────────── TIR ─────────────────────────
+  // İlanın markası çekici markasıdır; yalnız dorse kiralanıyorsa dorse markası.
+  // Bu yüzden her dorse tipinde önce çekici markaları, sonra o dorse tipini
+  // gerçekten üreten treyler markaları listelenir.
+  "cekici": [...TRUCK_BRANDS],
+  "tenteli": withTrucks(
+    "Tırsan", "Kässbohrer", "Koluman", "Otokar", "Özgül", "Nursan", "Serin Treyler",
+    "Özsan Treyler", "Global Treyler", "Aksoylu", "Yalçın Dorse", "Güneysan Dorse",
+    "Reis Treyler", "Komodo Treyler", "Nükte Trailer", "OKT Trailer", "Scorpion Trailer",
+    "Takdir Treyler", "Tal Treyler", "Adakon Treyler", "Fesan", "Çarsan",
+    "Krone", "Schmitz Cargobull", "Kögel", "Wielton", "Schwarzmüller", "Fliegl", "Lecitrailer",
+  ),
+  "kapali-kasa": withTrucks(
+    "Tırsan", "Kässbohrer", "Koluman", "Otokar", "Özgül", "Nursan", "Serin Treyler",
+    "Aksoylu", "Yalçın Dorse", "Güneysan Dorse", "Reis Treyler", "Nükte Trailer",
+    "Krone", "Schmitz Cargobull", "Kögel", "Wielton", "Chereau", "Lamberet", "Lecitrailer",
+  ),
+  "frigorifik": withTrucks(
+    "Tırsan", "Kässbohrer", "Koluman", "Özgül", "Nursan", "Serin Treyler", "Aksoylu",
+    "Krone", "Schmitz Cargobull", "Kögel", "Chereau", "Lamberet", "Lecitrailer", "Wielton",
+  ),
+  "acik-kasa": withTrucks(
+    "Tırsan", "Kässbohrer", "Özgül", "Nursan", "Serin Treyler", "Özsan Treyler",
+    "Global Treyler", "Alim Treyler", "Yalçın Dorse", "Güneysan Dorse", "Reis Treyler",
+    "Komodo Treyler", "Takdir Treyler", "Tal Treyler", "Adakon Treyler", "Fesan",
+    "Krone", "Schmitz Cargobull", "Kögel", "Wielton", "Fliegl", "Langendorf", "Faymonville",
+  ),
+  "lowbed": withTrucks(
+    "Tırsan", "Kässbohrer", "Özgül", "Nursan", "Serin Treyler", "Özsan Treyler",
+    "Global Treyler", "Alim Treyler", "Gürleşenyıl", "Doğuş Treyler", "Komodo Treyler",
+    "Reis Treyler", "Güneysan Dorse", "Yalçın Dorse", "Adakon Treyler",
+    "Nooteboom", "Goldhofer", "Faymonville", "Broshuis", "Doll", "Cometto", "Scheuerle",
+    "Meusburger", "Langendorf", "Schmitz Cargobull", "Krone",
+  ),
+  "damperli": withTrucks(
+    "Tırsan", "Kässbohrer", "Özgül", "Nursan", "Serin Treyler", "Özsan Treyler",
+    "Özünlü Damper", "Çarsan", "Fesan", "Yalçın Dorse", "Güneysan Dorse", "Reis Treyler",
+    "Komodo Treyler", "Takdir Treyler", "Tal Treyler",
+    "Schmitz Cargobull", "Kögel", "Wielton", "Schwarzmüller", "Fliegl", "Langendorf",
+  ),
+  "silobas": withTrucks(
+    "Kässbohrer", "Tırsan", "Nursan", "Özgül", "Serin Treyler", "Şahin Tanker", "Sinanlı Tanker",
+    "Feldbinder", "Spitzer", "Schwarzmüller",
+  ),
+  "tanker": withTrucks(
+    "Kässbohrer", "Tırsan", "Şahin Tanker", "Sinanlı Tanker", "Nursan", "Özgül",
+    "Feldbinder", "Schwarzmüller", "Spitzer",
+  ),
+  "konteyner": withTrucks(
+    "Tırsan", "Kässbohrer", "Koluman", "Otokar", "Özgül", "Nursan", "Serin Treyler",
+    "Global Treyler", "Aksoylu", "Yalçın Dorse",
+    "Krone", "Schmitz Cargobull", "Kögel", "Wielton", "Lecitrailer", "Broshuis",
+  ),
+  "oto-tasiyici": withTrucks(
+    "Kässbohrer", "Özgül", "Nursan", "Serin Treyler", "Global Treyler",
+  ),
 };
 
 // ───────────────────────── yardımcılar ─────────────────────────

@@ -10,7 +10,7 @@
  * bir arama motoru değil, mevcut filtrelerin sesli kısayoludur.
  */
 
-import { getCategory, getSubCategoryName } from "../../categories";
+import { getCategory, getSubCategoryName, transportApplies } from "../../categories";
 import {
   CONDITION_LABELS,
   FUEL_LABELS,
@@ -155,6 +155,9 @@ function sanitize(params: Record<string, string>): Record<string, string> {
   }
   // Alt kategori kategorisiz anlamsızdır (filtre paneli de böyle davranır).
   if (out.altKategori && !out.kategori) delete out.altKategori;
+  // Tırın kendisi nakliye aracıdır; tır ilanlarında transport hep "yok". "Nakliye
+  // için tır" cümlesindeki nakliye filtresi kalsaydı sonuç sıfır olurdu.
+  if (out.nakliye && !transportApplies(out.kategori)) delete out.nakliye;
   return out;
 }
 

@@ -7,32 +7,14 @@ import type { Listing, RentalPeriod } from "@/lib/types";
 import { useAuth } from "@/context/auth-context";
 import { createRentalRequestAction } from "@/lib/actions/requests";
 import { PERIODS } from "@/lib/constants";
-import { daysBetween, formatPrice, primaryPrice } from "@/lib/format";
+import { formatPrice, primaryPrice } from "@/lib/format";
+import { computeRentalTotal, daysBetween } from "@/lib/pricing";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Label, Select, Textarea } from "@/components/ui/Field";
 import { CheckIcon } from "@/components/ui/icons";
 import { useRentalSelection } from "./rental-selection";
 
 const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`);
-
-/** Periyot başına süre adedini hesaplar */
-function quantityFor(period: RentalPeriod, days: number): number {
-  switch (period) {
-    case "saatlik": return Math.max(1, days * 8);
-    case "gunluk": return Math.max(1, days);
-    case "haftalik": return Math.max(1, Math.ceil(days / 7));
-    case "aylik": return Math.max(1, Math.ceil(days / 30));
-    case "yillik": return Math.max(1, Math.ceil(days / 365));
-  }
-}
-
-/** İki saat ("08:00", "10:00") arasındaki tam saat farkı */
-function hoursBetween(start: string, end: string): number {
-  if (!start || !end) return 0;
-  const sh = Number(start.slice(0, 2));
-  const eh = Number(end.slice(0, 2));
-  return Math.max(0, eh - sh);
-}
 
 export function RentRequestForm({ listing }: { listing: Listing }) {
   const { user } = useAuth();
@@ -52,22 +34,12 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
 
   const isOwn = user?.id === listing.ownerId;
 
+  // Tutar sunucuyla AYNI fonksiyonla hesaplanır (createRentalRequest yeniden hesaplar).
   const calc = useMemo(() => {
-    if (!start || !end) return null;
-    const days = daysBetween(start, end);
-    if (days <= 0) return null;
-    const unit = listing.prices[period];
-    if (unit == null) return null;
-    const qty = quantityFor(period, days);
+    const c = computeRentalTotal(listing.prices, period, start, end, startTime, endTime);
+    if (!c) return null;
     const unitLabel = PERIODS.find((p) => p.value === period)?.short ?? "";
-    const base = unit * qty;
-
-    // Gün bazlı kiralamada saatlik ek ücret (başlangıç–bitiş saati seçilmişse)
-    const hourly = listing.prices.saatlik ?? 0;
-    const hours = period !== "saatlik" && hourly > 0 ? hoursBetween(startTime, endTime) : 0;
-    const hourAddon = hours * hourly;
-
-    return { days, qty, unit, unitLabel, base, hourly, hours, hourAddon, total: base + hourAddon };
+    return { ...c, unitLabel };
   }, [start, end, period, startTime, endTime, listing.prices]);
 
   const submit = (e: React.FormEvent) => {
@@ -80,7 +52,8 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
     if (!start || !end) return setError("Lütfen başlangıç ve bitiş tarihi seçin.");
     const days = daysBetween(start, end);
     if (days <= 0) return setError("Bitiş tarihi başlangıçtan sonra olmalıdır.");
-    if (listing.minRentalDays && days < listing.minRentalDays) {
+    // Sefer kiralamasında süre değil sefer satılır; minimum gün kuralı uygulanmaz.
+    if (period !== "sefer" && listing.minRentalDays && days < listing.minRentalDays) {
       return setError(`Bu ilan için minimum kiralama süresi ${listing.minRentalDays} gündür.`);
     }
     if (!calc) return setError("Tutar hesaplanamadı.");
@@ -182,7 +155,11 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
       {calc && (
         <div className="rounded-lg border border-line bg-surface-2 p-3 text-sm">
           <div className="flex justify-between text-muted">
-            <span>{calc.qty} {calc.unitLabel}{calc.unitLabel === "gün" ? "" : ` (${calc.days} gün)`}</span>
+            <span>
+              {period === "sefer"
+                ? `Tek sefer (${calc.days} gün içinde)`
+                : `${calc.qty} ${calc.unitLabel}${calc.unitLabel === "gün" ? "" : ` (${calc.days} gün)`}`}
+            </span>
             <span>{formatPrice(calc.unit)} × {calc.qty} = {formatPrice(calc.base)}</span>
           </div>
           {calc.hours > 0 && (

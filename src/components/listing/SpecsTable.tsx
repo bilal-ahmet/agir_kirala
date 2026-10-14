@@ -1,5 +1,5 @@
 import type { Listing } from "@/lib/types";
-import { getCategory } from "@/lib/categories";
+import { getCategory, operatorLabel, specFieldsFor, transportApplies } from "@/lib/categories";
 import { FUEL_LABELS, TRANSPORT_LABELS } from "@/lib/constants";
 import { formatUsage } from "@/lib/format";
 
@@ -15,13 +15,23 @@ export function SpecsTable({ listing }: { listing: Listing }) {
       label: category?.usageMetric === "saat" ? "Çalışma Saati" : "Kilometre",
       value: formatUsage(listing.usage, category?.usageMetric ?? "saat"),
     },
-    { label: "Operatör", value: listing.operator ? "Operatörlü" : "Operatörsüz (kuru kiralama)" },
-    { label: "Nakliye", value: TRANSPORT_LABELS[listing.transport] },
+    {
+      label: category?.operatorLabels ? "Şoför" : "Operatör",
+      value: category?.operatorLabels
+        ? operatorLabel(listing.categorySlug, listing.operator)
+        : listing.operator
+          ? "Operatörlü"
+          : "Operatörsüz (kuru kiralama)",
+    },
   ];
+  // Tırın kendisi nakliye aracı: "nakliye dahil/ekstra" satırı anlamsız.
+  if (transportApplies(listing.categorySlug)) {
+    rows.push({ label: "Nakliye", value: TRANSPORT_LABELS[listing.transport] });
+  }
 
   if (listing.fuel) rows.push({ label: "Yakıt", value: FUEL_LABELS[listing.fuel] });
 
-  for (const field of category?.specFields ?? []) {
+  for (const field of specFieldsFor(listing.categorySlug, listing.subCategorySlug)) {
     const raw = listing.specs[field.key];
     if (raw == null) continue;
     let value: string;

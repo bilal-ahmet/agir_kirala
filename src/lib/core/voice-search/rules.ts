@@ -186,6 +186,7 @@ function phaseA(ctx: Ctx): void {
     [/\d+ hafta[a-z]*|haftali[a-z]*/, "haftalik"],
     [/\d+ ay(?:li[a-z]*|lig[a-z]*)?|ayli[a-z]*/, "aylik"],
     [/\d+ yil(?:li[a-z]*|lig[a-z]*)?|yilli[a-z]*/, "yillik"],
+    [/sefer bas[a-z]*|seferlik|tek sefer|\d+ sefer[a-z]*/, "sefer"],
   ];
   for (const [re, p] of PERIOD) scan(ctx, re, () => addUnique(f.periyot, p));
 

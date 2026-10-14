@@ -74,6 +74,7 @@ export const priceMapSchema = z.object({
   haftalik: z.number().positive().optional(),
   aylik: z.number().positive().optional(),
   yillik: z.number().positive().optional(),
+  sefer: z.number().positive().optional(),
 });
 
 export const availabilitySchema = z.object({
@@ -135,7 +136,7 @@ export const createRentalRequestSchema = z.object({
   /** "YYYY-MM-DD" — yerel gün, saat dilimi taşımaz. */
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Başlangıç tarihi geçersiz."),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Bitiş tarihi geçersiz."),
-  period: z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik"]),
+  period: z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sefer"]),
   message: z.string().trim().max(2000).default(""),
   startTime: z.string().optional(),
   endTime: z.string().optional(),

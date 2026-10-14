@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFilterController } from "./filter-controller";
-import { CATEGORIES, getCategory, getFilterableSpecFields } from "@/lib/categories";
+import { CATEGORIES, getCategory, getFilterableSpecFields, operatorLabel, transportApplies } from "@/lib/categories";
 import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
@@ -84,6 +84,10 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
               if (v) p.set("altKategori", v);
               else p.delete("altKategori");
               p.delete("marka");
+              // Yeni alt kategoride geçersiz kalan teknik filtreler (ör. lowbed'den
+              // tenteliye geçince "rampa tipi") görünmez ama sonucu daraltırdı.
+              const valid = new Set(getFilterableSpecFields(kategori, v || undefined).map((f) => `spec_${f.key}`));
+              [...p.keys()].filter((k) => k.startsWith("spec_") && !valid.has(k)).forEach((k) => p.delete(k));
             })
           }
         >
@@ -168,12 +172,12 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
         ))}
       </Section>
 
-      {/* Operatör */}
-      <Section title="Operatör">
+      {/* Operatör (tırda "Şoför") */}
+      <Section title={category?.operatorLabels ? "Şoför" : "Operatör"}>
         {OPERATOR_FILTERS.map((o) => (
           <CheckRow
             key={o}
-            label={OPERATOR_LABELS[o]}
+            label={category?.operatorLabels ? operatorLabel(category.slug, o === "operatorlu") : OPERATOR_LABELS[o]}
             checked={has("operator", o)}
             onChange={() => toggleInList("operator", o)}
           />
@@ -215,10 +219,10 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
       </Section>
 
       {/* Kategoriye özel teknik filtreler */}
-      {category && getFilterableSpecFields(kategori).length > 0 && (
+      {category && getFilterableSpecFields(kategori, altKategori).length > 0 && (
         <Section title="Teknik Özellikler" collapsible={collapsibleAdvanced}>
           <div className="space-y-2">
-            {getFilterableSpecFields(kategori).map((field) => (
+            {getFilterableSpecFields(kategori, altKategori).map((field) => (
               <div key={field.key}>
                 <label className="mb-1 block text-xs text-muted">
                   {field.label}
@@ -230,17 +234,22 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
                   onChange={(e) => setParam(`spec_${field.key}`, e.target.value)}
                 >
                   <option value="">Seçiniz</option>
-                  {field.type === "number"
-                    ? (field.steps ?? []).map((s) => (
-                        <option key={s} value={s}>
-                          {s}+ {field.unit}
-                        </option>
-                      ))
-                    : (field.options ?? []).map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
+                  {field.type === "number" ? (
+                    (field.steps ?? []).map((s) => (
+                      <option key={s} value={s}>
+                        {s}+ {field.unit}
+                      </option>
+                    ))
+                  ) : field.type === "boolean" ? (
+                    // jsonb'deki true, `specs->>key = 'true'` ile eşleşir.
+                    <option value="true">Var</option>
+                  ) : (
+                    (field.options ?? []).map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))
+                  )}
                 </Select>
               </div>
             ))}
@@ -256,17 +265,19 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
         </div>
       </Section>
 
-      {/* Nakliye */}
-      <Section title="Nakliye" collapsible={collapsibleAdvanced}>
-        {TRANSPORT_FILTERS.map((t) => (
-          <CheckRow
-            key={t}
-            label={NAKLIYE_LABELS[t]}
-            checked={has("nakliye", t)}
-            onChange={() => toggleInList("nakliye", t)}
-          />
-        ))}
-      </Section>
+      {/* Nakliye — tırın kendisi nakliye aracı olduğu için orada gizli */}
+      {transportApplies(kategori) && (
+        <Section title="Nakliye" collapsible={collapsibleAdvanced}>
+          {TRANSPORT_FILTERS.map((t) => (
+            <CheckRow
+              key={t}
+              label={NAKLIYE_LABELS[t]}
+              checked={has("nakliye", t)}
+              onChange={() => toggleInList("nakliye", t)}
+            />
+          ))}
+        </Section>
+      )}
 
       {/* Yakıt */}
       <Section title="Yakıt Tipi" collapsible={collapsibleAdvanced}>

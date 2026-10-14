@@ -1,6 +1,7 @@
 // Kiralama tutarı hesaplama — saf fonksiyonlar (client önizleme + server action ortak kullanır).
 // RentRequestForm.tsx'teki mantığın tek kaynağı.
 
+import { getCategory } from "./categories";
 import type { PriceMap, RentalPeriod } from "./types";
 
 /**
@@ -27,7 +28,25 @@ export function quantityFor(period: RentalPeriod, days: number): number {
       return Math.max(1, Math.ceil(days / 30));
     case "yillik":
       return Math.max(1, Math.ceil(days / 365));
+    case "sefer":
+      // Bir talep = bir sefer; tarih aralığı yalnız yükleme günlerini belirtir.
+      return 1;
   }
+}
+
+/**
+ * Yayındaki ilanın fiyat değişmezi. Hata metni döner, sorun yoksa null.
+ *
+ * Makinelerde saatlik ücret zorunlu (talep formu gün bazlı kiralamada saatlik
+ * ek ücreti ondan hesaplar). Sefer fiyatlı kategorilerde (tır) saatlik ücret
+ * anlamsız; en az bir fiyat yeterli.
+ */
+export function publishPriceError(categorySlug: string, prices: PriceMap | undefined): string | null {
+  if (getCategory(categorySlug)?.tripPricing) {
+    const any = Object.values(prices ?? {}).some((v) => v != null);
+    return any ? null : "Yayınlamak için en az bir fiyat (sefer başı, günlük veya aylık) zorunludur.";
+  }
+  return prices?.saatlik == null ? "Yayınlamak için saatlik ücret zorunludur." : null;
 }
 
 /** İki saat ("08:00", "10:00") arasındaki tam saat farkı. */
@@ -70,9 +89,10 @@ export function computeRentalTotal(
   const qty = quantityFor(period, days);
   const base = unit * qty;
 
-  // Gün bazlı kiralamada saatlik ek ücret.
+  // Gün bazlı kiralamada saatlik ek ücret (seferde uygulanmaz).
   const hourly = prices.saatlik ?? 0;
-  const hours = period !== "saatlik" && hourly > 0 ? hoursBetween(startTime, endTime) : 0;
+  const hours =
+    period !== "saatlik" && period !== "sefer" && hourly > 0 ? hoursBetween(startTime, endTime) : 0;
   const hourAddon = hours * hourly;
 
   return { days, qty, unit, base, hourly, hours, hourAddon, total: base + hourAddon };

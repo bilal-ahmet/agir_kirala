@@ -1,7 +1,7 @@
 "use client";
 
 import { useFilters } from "./use-filters";
-import { getCategory, getSubCategoryName } from "@/lib/categories";
+import { getCategory, getSubCategoryName, operatorLabel } from "@/lib/categories";
 import {
   CONDITION_LABELS,
   FUEL_LABELS,
@@ -73,7 +73,11 @@ export function ActiveFilterChips() {
     chips.push({ label: `Yıl: ${minY || "…"}–${maxY || "…"}`, onRemove: () => update((p) => { p.delete("minYil"); p.delete("maxYil"); }) });
   }
 
-  listChips("operator", (v) => OPERATOR_LABELS[v as OperatorFilter] ?? v);
+  listChips("operator", (v) =>
+    category?.operatorLabels
+      ? operatorLabel(category.slug, v === "operatorlu")
+      : (OPERATOR_LABELS[v as OperatorFilter] ?? v),
+  );
   listChips("durum", (v) => CONDITION_LABELS[v as ListingCondition] ?? v);
   listChips("nakliye", (v) => NAKLIYE_LABELS[v as TransportFilter] ?? v);
   listChips("yakit", (v) => FUEL_LABELS[v as FuelType] ?? v);
@@ -87,7 +91,12 @@ export function ActiveFilterChips() {
     for (const field of category.specFields) {
       const val = sp.get(`spec_${field.key}`);
       if (val) {
-        const suffix = field.type === "number" ? `${val}+ ${field.unit ?? ""}`.trim() : val;
+        const suffix =
+          field.type === "number"
+            ? `${val}+ ${field.unit ?? ""}`.trim()
+            : field.type === "boolean"
+              ? "Var"
+              : val;
         chips.push({ label: `${field.label}: ${suffix}`, onRemove: () => setParam(`spec_${field.key}`, "") });
       }
     }

@@ -28,6 +28,7 @@ import type {
   TransportOption,
 } from "../../types";
 import { toListing } from "./mappers";
+import { haulingPlan } from "../../hauling";
 
 /**
  * İlgili fiyat (₺) SQL ifadesi.
@@ -50,7 +51,8 @@ function relevantPriceExpr(periods?: RentalPeriod[]): SQL {
     ${listings.prices}->>'saatlik',
     ${listings.prices}->>'haftalik',
     ${listings.prices}->>'aylik',
-    ${listings.prices}->>'yillik'
+    ${listings.prices}->>'yillik',
+    ${listings.prices}->>'sefer'
   )::numeric`;
 }
 
@@ -335,6 +337,42 @@ export async function similarListings(listing: Listing, limit = 4): Promise<List
         eq(listings.categorySlug, listing.categorySlug),
         ne(listings.id, listing.id),
       ),
+    )
+    .limit(limit);
+  return hydrate(rows);
+}
+
+/**
+ * İş makinesi ilanı için "nakliye için tır" önerileri (kurallar: lib/hauling.ts).
+ *
+ * Öneri anlamsızsa (tır ilanı, kendi yola çıkan makine, nakliye dahil) DB'ye
+ * hiç gidilmez. Tek sorgu + hydrate; detay sayfasında benzer ilanlarla paralel
+ * çalıştığı için sayfaya ek bekleme eklemez.
+ */
+export async function haulingListings(listing: Listing, limit = 3): Promise<Listing[]> {
+  const plan = haulingPlan(listing);
+  if (!plan) return [];
+
+  const conditions: SQL[] = [
+    eq(listings.status, "aktif"),
+    eq(listings.categorySlug, "tir"),
+    inArray(listings.subCategorySlug, plan.subcategories),
+    // Yalnız dorse kiralayan ilan, çekicisi olmayan makine kiracısına yaramaz.
+    sql`coalesce(${listings.specs}->>'kiralamaKapsami', '') <> 'Yalnız Dorse'`,
+  ];
+  if (plan.minCapacity !== undefined) {
+    conditions.push(sql`(${listings.specs}->>'tasimaKapasitesi')::numeric >= ${plan.minCapacity}`);
+  }
+
+  const rows = await db
+    .select()
+    .from(listings)
+    .where(and(...conditions))
+    .orderBy(
+      sql`case when ${listings.city} = ${plan.preferCity} then 0 else 1 end`,
+      sql`case when ${listings.subCategorySlug} = 'lowbed' then 0 else 1 end`,
+      desc(listings.featured),
+      desc(listings.createdAt),
     )
     .limit(limit);
   return hydrate(rows);

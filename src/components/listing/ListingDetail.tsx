@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Listing, User } from "@/lib/types";
-import { getCategory } from "@/lib/categories";
+import { getCategory, operatorLabel, transportApplies } from "@/lib/categories";
 import { PERIODS } from "@/lib/constants";
 import { formatPrice, formatUsage, primaryPrice, timeAgo } from "@/lib/format";
 import { Gallery } from "./Gallery";
@@ -12,6 +12,7 @@ import { RentalSelectionProvider } from "./rental-selection";
 import { ContactBox } from "./ContactBox";
 import { OwnerCard } from "./OwnerCard";
 import { SimilarListings } from "./SimilarListings";
+import { HaulingSuggestions } from "./HaulingSuggestions";
 import { Badge } from "@/components/ui/Badge";
 import { CONDITION_LABELS } from "@/lib/constants";
 import {
@@ -42,11 +43,14 @@ export function ListingDetail({
   listing,
   owner,
   similar = [],
+  hauling,
   reviews = [],
 }: {
   listing: Listing;
   owner?: User;
   similar?: Listing[];
+  /** Nakliye önerileri. Verilmezse (ör. ilan önizlemesi) bölüm çizilmez. */
+  hauling?: Listing[];
   reviews?: ListingReview[];
 }) {
   const category = getCategory(listing.categorySlug);
@@ -88,9 +92,11 @@ export function ListingDetail({
                 {CONDITION_LABELS[listing.condition]}
               </Badge>
               <Badge tone={listing.operator ? "info" : "neutral"}>
-                {listing.operator ? "Operatörlü" : "Operatörsüz"}
+                {operatorLabel(listing.categorySlug, listing.operator)}
               </Badge>
-              {listing.transport !== "yok" && <Badge tone="success">Nakliye Var</Badge>}
+              {transportApplies(listing.categorySlug) && listing.transport !== "yok" && (
+                <Badge tone="success">Nakliye Var</Badge>
+              )}
               {listing.videoUrl && <Badge tone="info">▶ Videolu</Badge>}
             </div>
 
@@ -212,6 +218,7 @@ export function ListingDetail({
       </div>
       </RentalSelectionProvider>
 
+      {hauling && <HaulingSuggestions listing={listing} items={hauling} />}
       <SimilarListings items={similar} />
     </div>
   );

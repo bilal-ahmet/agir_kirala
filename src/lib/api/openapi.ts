@@ -128,7 +128,7 @@ const requestSchema = z.object({
   ownerId: z.string(),
   startDate: z.string().describe("YYYY-MM-DD — yerel gün, saat dilimi taşımaz."),
   endDate: z.string().describe("YYYY-MM-DD"),
-  period: z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik"]),
+  period: z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sefer"]),
   message: z.string(),
   status: z.enum(["beklemede", "onaylandi", "reddedildi", "iptal"]),
   createdAt: z.string().describe("ISO-8601 UTC."),
@@ -219,6 +219,7 @@ const priceMapSchemaOut = z
     haftalik: z.number().optional(),
     aylik: z.number().optional(),
     yillik: z.number().optional(),
+    sefer: z.number().optional().describe("Sefer başı fiyat (yalnız tır ilanlarında)."),
   })
   .describe("Periyot → tam sayı TL. Sahibi yalnız sunduğu periyotları doldurur.");
 
@@ -338,7 +339,7 @@ const LISTING_QUERY_PARAMS: Json[] = [
   named(
     "periyot",
     csv(
-      ["saatlik", "gunluk", "haftalik", "aylik", "yillik"],
+      ["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sefer"],
       "Fiyatlandırma periyodu. Birden çok seçilirse aralarındaki EN DÜŞÜK fiyat baz alınır.",
     ),
   ),
@@ -463,6 +464,7 @@ const ENDPOINTS: Endpoint[] = [
   { method: "patch", path: "/listings/{id}", id: "updateListing", summary: "İlan güncelleme. prices/specs/availability TAM DEĞİŞİR (merge yok).", auth: true, params: ["id"], request: updateListingSchema, response: ref("Ack") },
   { method: "delete", path: "/listings/{id}", id: "deleteListing", summary: "İlan silme.", auth: true, params: ["id"], status: 204 },
   { method: "patch", path: "/listings/{id}/status", id: "updateListingStatus", summary: "Yayın durumu değiştirme.", auth: true, params: ["id"], request: listingStatusBodySchema, response: ref("Ack") },
+  { method: "get", path: "/listings/{id}/hauling", id: "getHaulingListings", summary: "İş makinesi ilanı için nakliye (tır) önerileri: makineyi taşıyabilecek lowbed / açık kasa tırlar, önce aynı il. applicable=false ise öneri anlamsızdır (tır ilanı, kendi yola çıkan makine, nakliye dahil).", auth: false, params: ["id"], response: ref("HaulingSuggestions") },
   { method: "get", path: "/listings/{id}/similar", id: "getSimilarListings", summary: "Benzer ilanlar.", auth: false, params: ["id"], response: listOf(ref("Listing")) },
   { method: "post", path: "/listings/{id}/upload-ticket", id: "createUploadTicket", summary: "İmzalı yükleme bileti. Fotoda orijinal (1600 px) + küçük boy (400 px), ikisi de WebP.", auth: true, params: ["id"], request: uploadTicketSchema, response: ref("UploadTicket") },
   { method: "post", path: "/listings/{id}/media", id: "registerMedia", summary: "Yükleme sonrası kayıt. thumbPath opsiyoneldir.", auth: true, params: ["id"], request: registerMediaSchema, response: obj({ url: { type: "string" }, thumbUrl: { type: "string" } }, ["url", "thumbUrl"]), status: 201 },
@@ -693,6 +695,18 @@ export function buildOpenApiDocument(): Json {
             label: { type: "string", description: "Türkçe görünen ad." },
           },
           ["param", "value", "label"],
+        ),
+        HaulingSuggestions: obj(
+          {
+            applicable: { type: "boolean", description: "false → istemci nakliye bölümünü göstermez." },
+            results: arrayOf(ref("Listing")),
+            searchParams: {
+              type: "object",
+              additionalProperties: { type: "string" },
+              description: "\"Tümünü gör\" için GET /listings sorgu parametreleri.",
+            },
+          },
+          ["applicable", "results", "searchParams"],
         ),
         CreatedId: obj({ id: { type: "string" } }, ["id"]),
         Ack: obj({ ok: { type: "boolean" } }, ["ok"]),

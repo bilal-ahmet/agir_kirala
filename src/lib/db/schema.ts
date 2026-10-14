@@ -38,6 +38,7 @@ export const rentalPeriodEnum = pgEnum("rental_period", [
   "haftalik",
   "aylik",
   "yillik",
+  "sefer",
 ]);
 export const listingConditionEnum = pgEnum("listing_condition", ["sifir", "ikinci_el"]);
 export const contactPreferenceEnum = pgEnum("contact_preference", [

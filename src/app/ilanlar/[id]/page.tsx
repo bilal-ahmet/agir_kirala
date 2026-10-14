@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { similarListings } from "@/lib/db/queries/listings";
+import { haulingListings, similarListings } from "@/lib/db/queries/listings";
 import { getUser } from "@/lib/db/queries/users";
 import { reviewsForUser } from "@/lib/db/queries/reviews";
 import { getListingForViewer } from "@/lib/core/listings";
@@ -38,10 +38,13 @@ export default async function ListingDetailPage({
   const listing = await getListingForViewer(id, user?.id);
   if (!listing) notFound();
 
-  const [owner, similar, reviews] = await Promise.all([
+  const [owner, similar, hauling, reviews] = await Promise.all([
     getUser(listing.ownerId),
     similarListings(listing, 3),
+    haulingListings(listing, 3),
     reviewsForUser(listing.ownerId),
   ]);
-  return <ListingDetail listing={listing} owner={owner} similar={similar} reviews={reviews} />;
+  return (
+    <ListingDetail listing={listing} owner={owner} similar={similar} hauling={hauling} reviews={reviews} />
+  );
 }

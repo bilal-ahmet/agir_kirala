@@ -25,9 +25,12 @@ export function formatPriceWithPeriod(value: number, period: RentalPeriod): stri
   return `${tl.format(value)}/${short}`;
 }
 
-/** İlanın gösterilecek "ana" fiyatını seçer: günlük > saatlik > haftalık > aylık */
+/**
+ * İlanın gösterilecek "ana" fiyatını seçer: sefer > günlük > saatlik > haftalık > aylık.
+ * Sefer fiyatı yalnız tır ilanlarında bulunur ve orada asıl fiyat odur.
+ */
 export function primaryPrice(prices: PriceMap): { value: number; period: RentalPeriod } | null {
-  const order: RentalPeriod[] = ["gunluk", "saatlik", "haftalik", "aylik", "yillik"];
+  const order: RentalPeriod[] = ["sefer", "gunluk", "saatlik", "haftalik", "aylik", "yillik"];
   for (const period of order) {
     const value = prices[period];
     if (value != null) return { value, period };

@@ -152,6 +152,48 @@ Politika yazıldığında aşağıdaki paragraf eklenmeli:
 > da yapabilirsiniz.
 
 
+## Tır kategorisi ve nakliye önerisi
+
+Yeni `tir` kategorisi `/meta` üzerinden otomatik gelir. Taksonomiye eklenen
+**isteğe bağlı** alanlar; eski uygulama sürümleri bunları yok sayar, ama doğru
+gösterim için yeni sürüm okumalı:
+
+| Alan | Anlamı |
+|---|---|
+| `SpecField.subcategories` | Alan yalnız bu alt kategorilerde gösterilir ve filtrelenir (ör. lowbed'in `rampaTipi`). Yoksa tüm alt kategoriler. Alt kategori seçilmemişse yalnız kısıtsız alanlar. |
+| `Category.operatorLabels` | `{ yes, no }` — tırda "Şoförlü/Şoförsüz". Yoksa "Operatörlü/Operatörsüz". `operator` alanının anlamı değişmez. |
+| `Category.transportApplicable` | `false` → "nakliye dahil/ekstra" alanı formda, detayda ve filtrede gösterilmez. |
+| `Category.tripPricing` | `true` → ilan formunda "Sefer Başı" fiyatı sunulur. Bu kategoride yayın için saatlik ücret değil, **en az bir fiyat** zorunludur. |
+| `Category.needsHauling`, `SubCategory.selfDriving` | Nakliye önerisinin kuralı (aşağıda). İstemci bunu kendisi hesaplamaz, uçtaki `applicable` alanını kullanır. |
+
+Boolean teknik filtreler `spec_<key>=true` olarak gönderilir (ör. `spec_adr=true`).
+
+**Sefer başı fiyat:** `RentalPeriod`'a `"sefer"` eklendi (`prices.sefer`,
+talepte `period: "sefer"`, aramada `periyot=sefer`). Bir talep **tek sefer**dir:
+tutar = sefer fiyatı, tarih aralığı yalnız yükleme günlerini belirtir, minimum
+kiralama günü kuralı uygulanmaz. Eski uygulama sürümleri `prices.sefer`'i
+bilinmeyen anahtar olarak yok sayar; sefer talebi oluşturmak yeni sürüm ister.
+İlanın ana fiyatı sefer fiyatı varsa odur (`format.ts → primaryPrice`).
+
+**Nakliye önerisi:** iş makinesi ilanının detayında, makineyi taşıyabilecek tırlar.
+
+```
+GET /api/v1/listings/{id}/hauling
+→ { "applicable": true,
+    "results": [Listing, …],            // en fazla 4, önce aynı il, sonra lowbed
+    "searchParams": { "kategori": "tir", "altKategori": "lowbed",
+                      "spec_tasimaKapasitesi": "22" } }
+```
+
+- `applicable: false` → bölüm hiç gösterilmez (tır ilanı, damperli kamyon, mobil
+  vinç gibi kendi yola çıkan makine ya da nakliye fiyata dahil).
+- `applicable: true` ve `results` boş → "uygun tır yok, tümüne bak" kartı;
+  `searchParams` ile `GET /listings` açılır.
+- Kurallar `src/lib/hauling.ts`'te: lowbed + açık kasa; makinenin
+  `operasyonAgirligi` biliniyorsa `tasimaKapasitesi ≥ ağırlık`, 25 tonun
+  üstünde yalnız lowbed; "Yalnız Dorse" ilanları önerilmez (makine kiracısının
+  çekicisi yoktur).
+
 ## Eksik alanlar (Dart nullability)
 
 `required` olmayan bir alanın değeri yoksa anahtar yanıttan **tamamen düşer** —

@@ -39,7 +39,8 @@ export async function createRentalRequest(
     d.endTime ?? "",
   );
   if (!calc) return fail("validation", "Tutar hesaplanamadı. Tarih ve periyodu kontrol edin.");
-  if (listing.minRentalDays && calc.days < listing.minRentalDays) {
+  // Sefer kiralamasında süre değil sefer satılır; minimum gün kuralı uygulanmaz.
+  if (d.period !== "sefer" && listing.minRentalDays && calc.days < listing.minRentalDays) {
     return fail(
       "validation",
       `Bu ilan için minimum kiralama süresi ${listing.minRentalDays} gündür.`,

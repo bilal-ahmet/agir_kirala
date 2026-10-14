@@ -5,6 +5,7 @@ import { db } from "../db";
 import { listings } from "../db/schema";
 import { getListingById } from "../db/queries/listings";
 import { getCategory } from "../categories";
+import { publishPriceError } from "../pricing";
 import type { Availability, Listing, ListingStatus, PriceMap, User } from "../types";
 import { fail, mutated, ok, type MutationResult, type Result } from "./errors";
 import {
@@ -39,10 +40,6 @@ export async function getListingForViewer(
 
 const REVALIDATE_LIST = ["/ilanlar", "/hesap/ilanlarim"];
 
-/** "Yayındaki ilan saatlik ücret ister" değişmezi — create ve update'te aynı kural. */
-function hourlyPriceMissing(prices: PriceMap | undefined): boolean {
-  return prices?.saatlik == null;
-}
 
 export async function createListing(
   user: User,
@@ -60,9 +57,9 @@ export async function createListing(
     return fail("validation", "Geçersiz kategori seçimi.");
   }
 
-  if (d.status === "aktif" && hourlyPriceMissing(d.prices)) {
-    return fail("validation", "Yayınlamak için saatlik ücret zorunludur.");
-  }
+  // Fiyat değişmezi create ve update'te aynı kuraldır (bkz. publishPriceError).
+  const priceError = d.status === "aktif" ? publishPriceError(d.categorySlug, d.prices as PriceMap) : null;
+  if (priceError) return fail("validation", priceError);
 
   // Telefonu olmayan kullanıcının ilanı zorunlu olarak "sadece site içi mesaj".
   const contactPreference = user.phone.trim() ? d.contactPreference : "sadece_mesaj";
@@ -100,8 +97,8 @@ export async function createListing(
 /**
  * İlan güncelleme. jsonb alanlar TAM DEĞİŞİR (bkz. updateListingSchema).
  *
- * Saatlik-fiyat değişmezi burada da kontrol edilir: aksi halde kullanıcı yayındaki
- * bir ilandan saatlik fiyatı çıkarabilir; ilan aramada görünmeye devam eder
+ * Fiyat değişmezi burada da kontrol edilir: aksi halde kullanıcı yayındaki
+ * bir ilandan zorunlu fiyatı çıkarabilir; ilan aramada görünmeye devam eder
  * (relevantPriceExpr'in fallback zinciri sayesinde) ama talep formu tutar
  * hesaplayamaz — ilan geçersiz bir durumda yayında kalır.
  */
@@ -118,14 +115,14 @@ export async function updateListing(
 
   const current = await db.query.listings.findFirst({
     where: and(eq(listings.id, listingId), eq(listings.ownerId, user.id)),
-    columns: { id: true, status: true, prices: true },
+    columns: { id: true, status: true, prices: true, categorySlug: true },
   });
   if (!current) return fail("not_found", "İlan bulunamadı veya yetkiniz yok.");
 
   const nextPrices = d.prices !== undefined ? (d.prices as PriceMap) : current.prices;
-  if (current.status === "aktif" && hourlyPriceMissing(nextPrices)) {
-    return fail("validation", "Yayındaki ilandan saatlik ücret kaldırılamaz.");
-  }
+  const priceError =
+    current.status === "aktif" ? publishPriceError(current.categorySlug, nextPrices) : null;
+  if (priceError) return fail("validation", priceError);
 
   // Yalnızca gövdede GELEN alanlar yazılır; gelmeyenler dokunulmadan kalır.
   const patch: Record<string, unknown> = { updatedAt: new Date() };
@@ -174,14 +171,13 @@ export async function updateListingStatus(
 
   const current = await db.query.listings.findFirst({
     where: and(eq(listings.id, listingId), eq(listings.ownerId, user.id)),
-    columns: { id: true, prices: true },
+    columns: { id: true, prices: true, categorySlug: true },
   });
   if (!current) return fail("not_found", "İlan bulunamadı veya yetkiniz yok.");
 
-  // Değişmez create/update ile aynı: saatlik ücreti olmayan ilan yayına alınamaz.
-  if (status === "aktif" && hourlyPriceMissing(current.prices)) {
-    return fail("validation", "Yayınlamak için saatlik ücret zorunludur.");
-  }
+  // Değişmez create/update ile aynı (bkz. publishPriceError).
+  const priceError = status === "aktif" ? publishPriceError(current.categorySlug, current.prices) : null;
+  if (priceError) return fail("validation", priceError);
 
   await db
     .update(listings)
