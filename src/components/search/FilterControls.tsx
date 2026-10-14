@@ -21,6 +21,7 @@ import {
   TRANSPORT_FILTERS,
 } from "@/lib/constants";
 import { Input, Select } from "@/components/ui/Field";
+import { VoiceSearchButton } from "./VoiceSearchButton";
 import { cn } from "@/lib/cn";
 
 export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdvanced?: boolean } = {}) {
@@ -41,7 +42,12 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
     <div className="divide-y divide-line">
       {/* Kelime ile arama — filtrelerin en başında */}
       <Section title="Kelime ile Ara">
-        <TextParamInput keyName="q" placeholder="Marka, model veya ilan başlığı" />
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <TextParamInput keyName="q" placeholder="Marka, model veya ilan başlığı" />
+          </div>
+          <VoiceSearchButton />
+        </div>
       </Section>
 
       {/* Kategori */}

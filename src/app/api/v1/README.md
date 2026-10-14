@@ -98,6 +98,60 @@ birebir aynıdır (`kategori`, `marka`, `il`, `spec_<key>`, …) çünkü aynı
 Bilinçli taviz: sonsuz kaydırma sırasında yeni ilan eklenirse nadiren tekrar/
 atlama olabilir. Yedi sıralama anahtarını cursor'a uyarlamak orantısız iş olurdu.
 
+## Sesli arama
+
+Ses → metin **cihazda** yapılır; sunucuya yalnız metin gelir. Anlama işi
+sunucuda tek yerde durur (`src/lib/core/voice-search/`), böylece web ve mobil
+aynı sonucu verir ve yeni bir eş anlamlı eklemek mağaza güncellemesi istemez.
+
+```
+POST /api/v1/search/parse   { "text": "İstanbul'da operatörlü JCB 3CX kepçe" }
+→ { "params": { "il": "İstanbul", "operator": "operatorlu", "marka": "JCB",
+                "q": "3CX", "kategori": "hafriyat", "altKategori": "beko-loder" },
+    "chips": [{ "param": "il", "value": "İstanbul", "label": "İstanbul" }, …],
+    "remainder": "3CX", "source": "rules", "text": "…" }
+```
+
+`params` olduğu gibi `GET /api/v1/listings` sorgusuna eklenir. `chips` sonuç
+ekranında kaldırılabilir etiketler içindir: bir çip kaldırılınca `param`
+anahtarından `value` çıkarılır (çoklu parametrelerde virgüllü listeden), kalan
+parametrelerle arama yeniden yapılır. `kategori` kaldırılırsa `altKategori` ve
+`spec_*` de kaldırılmalı (web filtre paneli de böyle davranır).
+
+Anlaşılmayan cümle hata değildir: `params` boş döner, istemci "anlayamadım"
+gösterir. 400 yalnız boş ya da 200 karakterden uzun metinde döner.
+
+**Çözümleme:** önce sözlük (il, ilçe, kategori, marka, eş anlamlılar; bedava,
+~1 ms). Anlaşılmayan anlamlı kelime kalırsa ve `ANTHROPIC_API_KEY` tanımlıysa
+Claude Haiku yedeği denenir (`source: "llm"`). LLM'in çıktısı taksonomiden
+üretilen enum'larla kilitlidir; hata/zaman aşımında sessizce sözlük sonucuna
+düşülür. Hız sınırı (`voice`, IP başına 20/dk) yalnız LLM yoluna uygulanır.
+
+**Flutter:**
+
+- Paket `speech_to_text`. `listen(localeId: 'tr_TR', partialResults: true,
+  listenFor: Duration(seconds: 8))`; son metin `finalResult` geldiğinde gönderilir.
+- iOS `Info.plist`: `NSMicrophoneUsageDescription` ve
+  `NSSpeechRecognitionUsageDescription`.
+- Android `AndroidManifest.xml`: `RECORD_AUDIO` izni ve Android 11+ için
+  `<queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>`.
+- Cihazda Türkçe tanıma yoksa (`locales()` içinde `tr_TR` yok) mikrofon düğmesi gizlenmeli.
+- Mikrofon ekranında web'deki bilgilendirmenin karşılığı gösterilmeli (aşağıda).
+
+**Gizlilik:** Projede henüz bir gizlilik politikası sayfası yok. Web'de
+bilgilendirme, verinin toplandığı yerde, sesli arama panelinde gösteriliyor.
+Politika yazıldığında aşağıdaki paragraf eklenmeli:
+
+> **Sesli arama.** Sesli arama özelliğini kullandığınızda konuşmanız, metne
+> çevrilmesi için kullandığınız tarayıcının ya da cihazın ses tanıma hizmetine
+> iletilir (ör. Chrome'da Google, iOS'ta Apple, Android'de Google). Ses kaydı
+> sunucularımıza ulaşmaz; yalnızca ortaya çıkan arama metni gönderilir ve bu
+> metin saklanmaz. Sözlüğümüzle anlaşılamayan arama metinleri, arama
+> filtrelerine çevrilmesi amacıyla yapay zekâ hizmet sağlayıcımıza (Anthropic)
+> iletilebilir. Sesli aramayı kullanmak zorunlu değildir; aynı aramayı yazarak
+> da yapabilirsiniz.
+
+
 ## Eksik alanlar (Dart nullability)
 
 `required` olmayan bir alanın değeri yoksa anahtar yanıttan **tamamen düşer** —

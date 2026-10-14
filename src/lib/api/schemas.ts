@@ -29,6 +29,7 @@ export {
   updateListingSchema,
   updateRequestStatusSchema,
   uploadTicketSchema,
+  voiceQuerySchema,
 } from "../core/schemas";
 
 export const listingStatusBodySchema = z.object({

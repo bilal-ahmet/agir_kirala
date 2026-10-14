@@ -28,6 +28,8 @@ export const LIMITS = {
   login: { max: 10, windowMs: 15 * 60_000 },
   register: { max: 5, windowMs: 60 * 60_000 },
   forgot: { max: 3, windowMs: 60 * 60_000 },
+  /** Sesli aramada LLM yedeği — her çağrı API maliyeti. Kural yolu sınırsız. */
+  voice: { max: 20, windowMs: 60_000 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;

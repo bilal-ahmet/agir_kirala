@@ -238,3 +238,11 @@ export const EyeOffIcon = (p: IconProps) => (
     <path d="m3 3 18 18" />
   </Svg>
 );
+
+export const MicIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="9" y="2" width="6" height="12" rx="3" />
+    <path d="M5 10a7 7 0 0 0 14 0" />
+    <path d="M12 17v5" />
+  </Svg>
+);

@@ -196,3 +196,13 @@ export const registerMediaSchema = z.object({
 export const toggleFavoriteSchema = z.object({
   listingId: z.string().uuid(),
 });
+
+// ───────── Sesli arama ─────────
+
+export const voiceQuerySchema = z.object({
+  text: z
+    .string({ error: "Arama metni gerekli." })
+    .trim()
+    .min(1, "Arama metni boş olamaz.")
+    .max(200, "Arama metni en fazla 200 karakter olabilir."),
+});

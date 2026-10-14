@@ -27,6 +27,7 @@ import {
   toggleFavoriteSchema,
   updateListingSchema,
   uploadTicketSchema,
+  voiceQuerySchema,
 } from "./schemas";
 
 type Json = Record<string, unknown>;
@@ -455,6 +456,7 @@ const ENDPOINTS: Endpoint[] = [
   { method: "delete", path: "/me/sessions/{id}", id: "revokeSession", summary: "Uzaktan oturum kapatma.", auth: true, params: ["id"], status: 204 },
   { method: "get", path: "/me/badges", id: "getBadges", summary: "Bekleyen talep + okunmamış sohbet sayısı (push yerine polling).", auth: true, response: ref("Badges") },
 
+  { method: "post", path: "/search/parse", id: "parseVoiceSearch", summary: "Sesli arama: cihazda metne çevrilmiş cümleyi arama filtrelerine çevirir (ör. \"İstanbul'da operatörlü JCB kepçe\"). Dönen params olduğu gibi GET /listings sorgusuna eklenir.", auth: false, request: voiceQuerySchema, response: ref("VoiceSearchResult"), responseNote: "Anlaşılmayan cümle hata değildir: params boş döner." },
   { method: "get", path: "/listings", id: "searchListings", summary: "İlan arama. Filtre parametreleri web ile aynı (q, kategori, marka, il, sayfa, spec_*).", auth: false, query: true, response: ref("ListingPage"), responseNote: "12 ilan/sayfa." },
   { method: "post", path: "/listings", id: "createListing", summary: "İlan oluşturma.", auth: true, request: createListingSchema, response: ref("CreatedId"), status: 201 },
   { method: "get", path: "/listings/{id}", id: "getListing", summary: "İlan detayı. Aktif olmayan ilan yalnız sahibine açılır, diğerlerine 404.", auth: false, params: ["id"], response: ref("ListingDetail") },
@@ -664,6 +666,33 @@ export function buildOpenApiDocument(): Json {
             featured: arrayOf(ref("Listing")),
           },
           ["totalActive", "categoryCounts", "featured"],
+        ),
+        VoiceSearchResult: obj(
+          {
+            text: { type: "string", description: "Normalleştirilmiş cümle." },
+            params: {
+              type: "object",
+              additionalProperties: { type: "string" },
+              description:
+                "GET /listings sorgu parametreleri (q, kategori, altKategori, il, ilce, marka, periyot, operator, nakliye, durum, yakit, minFiyat, maxFiyat, minYil, sirala, spec_*). Çoklu değerler virgülle ayrılır.",
+            },
+            chips: arrayOf(ref("VoiceChip")),
+            remainder: { type: "string", description: "Hiçbir filtreye dönüşmeyen kelimeler (bilgi amaçlı)." },
+            source: {
+              type: "string",
+              enum: ["rules", "llm"],
+              description: "rules: sözlük eşleme. llm: serbest cümle için LLM yedeği de kullanıldı.",
+            },
+          },
+          ["text", "params", "chips", "remainder", "source"],
+        ),
+        VoiceChip: obj(
+          {
+            param: { type: "string", description: "Sorgu parametresi adı (ör. il, marka, spec_guc)." },
+            value: { type: "string", description: "Tek değer; çoklu parametrelerde listenin bir öğesi." },
+            label: { type: "string", description: "Türkçe görünen ad." },
+          },
+          ["param", "value", "label"],
         ),
         CreatedId: obj({ id: { type: "string" } }, ["id"]),
         Ack: obj({ ok: { type: "boolean" } }, ["ok"]),

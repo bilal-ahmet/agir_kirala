@@ -6,6 +6,7 @@ import { FilterPanel } from "./FilterPanel";
 import { SortSelect } from "./SortSelect";
 import { useFilters } from "./use-filters";
 import { UrlFilterProvider } from "./filter-controller";
+import { VoiceSearchButton } from "./VoiceSearchButton";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { FilterIcon } from "@/components/ui/icons";
 import { parseFilters, activeFilterCount } from "@/lib/filter-params";
@@ -29,6 +30,7 @@ export function MobileFilterBar() {
         )}
       </button>
       <SortSelect />
+      <VoiceSearchButton className="border border-line-strong" />
 
       <Sheet
         open={open}

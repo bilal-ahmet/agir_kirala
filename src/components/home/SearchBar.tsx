@@ -6,6 +6,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { PROVINCE_NAMES } from "@/lib/locations";
 import { Button } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
+import { VoiceSearchButton } from "@/components/search/VoiceSearchButton";
 import { cn } from "@/lib/cn";
 
 export function SearchBar({ className }: { className?: string }) {
@@ -43,6 +44,7 @@ export function SearchBar({ className }: { className?: string }) {
           className={fieldCls}
           aria-label="Arama"
         />
+        <VoiceSearchButton className="mr-1" />
       </div>
 
       <div className="grid grid-cols-2 gap-2 md:flex md:gap-0">
