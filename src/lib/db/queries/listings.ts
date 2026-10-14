@@ -19,7 +19,7 @@ import {
 import { db } from "../index";
 import { listingPhotos, listings, users } from "../schema";
 import type { ListingPhotoRow, ListingRow } from "../schema";
-import { RESULTS_PER_PAGE, TRANSPORT_VAR_VALUES } from "../../constants";
+import { PRIMARY_PRICE_ORDER, RESULTS_PER_PAGE, TRANSPORT_VAR_VALUES } from "../../constants";
 import type {
   FilterState,
   Listing,
@@ -36,7 +36,8 @@ import { haulingPlan } from "../../hauling";
  * - Birden çok periyot seçili → seçilenler arasındaki EN DÜŞÜK fiyat
  *   (LEAST NULL'ları yok sayar), böylece "min/max fiyat" seçilen periyotların
  *   herhangi birinde tutan ilanları getirir
- * - Hiç seçili değil → primaryPrice sırası (format.ts ile aynı)
+ * - Hiç seçili değil → kartta görünen fiyat (PRIMARY_PRICE_ORDER; format.ts →
+ *   primaryPrice ile aynı sabitten üretilir, ayrışamaz)
  */
 function relevantPriceExpr(periods?: RentalPeriod[]): SQL {
   if (periods?.length === 1) {
@@ -46,14 +47,8 @@ function relevantPriceExpr(periods?: RentalPeriod[]): SQL {
     const parts = periods.map((p) => sql`(${listings.prices}->>${p})::numeric`);
     return sql`least(${sql.join(parts, sql`, `)})`;
   }
-  return sql`coalesce(
-    ${listings.prices}->>'gunluk',
-    ${listings.prices}->>'saatlik',
-    ${listings.prices}->>'haftalik',
-    ${listings.prices}->>'aylik',
-    ${listings.prices}->>'yillik',
-    ${listings.prices}->>'sefer'
-  )::numeric`;
+  const parts = PRIMARY_PRICE_ORDER.map((p) => sql`${listings.prices}->>${p}`);
+  return sql`coalesce(${sql.join(parts, sql`, `)})::numeric`;
 }
 
 /** FilterState → WHERE koşulları (filters.ts matches() ile eşdeğer). */

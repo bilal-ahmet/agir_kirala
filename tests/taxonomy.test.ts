@@ -20,6 +20,8 @@ import { ALL_BRANDS, SUBCATEGORY_BRANDS, brandsForSubcategory, isTurkishBrand } 
 import { TRAILER_BRANDS, TRUCK_BRANDS } from "@/lib/truck-brands";
 import { parseFilters } from "@/lib/filter-params";
 import { computeRentalTotal, publishPriceError, quantityFor } from "@/lib/pricing";
+import { PERIODS, PRIMARY_PRICE_ORDER } from "@/lib/constants";
+import { primaryPrice } from "@/lib/format";
 import { haulingPlan, LOWBED_ONLY_ABOVE_TON } from "@/lib/hauling";
 import { buildOpenApiDocument } from "@/lib/api/openapi";
 import { LISTINGS } from "@/lib/data/listings";
@@ -171,6 +173,19 @@ describe("sefer başı fiyat", () => {
     expect(quantityFor("sefer", 3)).toBe(1);
     const c = computeRentalTotal({ sefer: 10000, saatlik: 500 }, "sefer", "2026-10-01", "2026-10-03", "08:00", "12:00");
     expect(c).toMatchObject({ qty: 1, base: 10000, hourAddon: 0, total: 10000 });
+  });
+
+  it("ana fiyat sırası her periyodu tam bir kez içerir", () => {
+    // Aramadaki varsayılan fiyat ifadesi de bu sabitten üretilir; eksik bir
+    // periyot o ilanı fiyat sıralamasında NULL'a düşürürdü.
+    expect([...PRIMARY_PRICE_ORDER].sort()).toEqual(PERIODS.map((p) => p.value).sort());
+  });
+
+  it("kartta sefer fiyatı önce gelir (sıralama ve filtreyle aynı fiyat)", () => {
+    expect(primaryPrice({ sefer: 9000, gunluk: 12000 })).toEqual({ value: 9000, period: "sefer" });
+    expect(primaryPrice({ gunluk: 12000, saatlik: 1500 })).toEqual({ value: 12000, period: "gunluk" });
+    expect(primaryPrice({ aylik: 200000 })).toEqual({ value: 200000, period: "aylik" });
+    expect(primaryPrice({})).toBeNull();
   });
 
   it("yayın kuralı: makinede saatlik zorunlu, tırda en az bir fiyat", () => {

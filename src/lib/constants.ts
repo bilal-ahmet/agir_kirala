@@ -28,6 +28,25 @@ export const LISTING_PERIODS: { value: RentalPeriod; label: string; short: strin
   { value: "sefer", label: "Sefer Başı", short: "sefer" },
 ];
 
+/**
+ * İlanın "ana" fiyatının seçim sırası — TEK KAYNAK.
+ *
+ * Kartta görünen fiyat (format.ts → primaryPrice) ile periyot seçilmeden
+ * yapılan fiyat sıralaması ve min/max filtresi (db/queries/listings.ts →
+ * relevantPriceExpr) bu sırayı kullanır. İkisi ayrı yazıldığında ayrıştılar:
+ * tır kartı sefer fiyatını gösterirken sorgu günlük fiyata göre sıralıyordu.
+ *
+ * Sefer en başta: yalnız tır ilanlarında bulunur ve orada asıl fiyat odur.
+ */
+export const PRIMARY_PRICE_ORDER: readonly RentalPeriod[] = [
+  "sefer",
+  "gunluk",
+  "saatlik",
+  "haftalik",
+  "aylik",
+  "yillik",
+];
+
 export const PERIOD_LABELS: Record<RentalPeriod, string> = {
   saatlik: "Saatlik",
   gunluk: "Günlük",

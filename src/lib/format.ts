@@ -1,4 +1,4 @@
-import { PERIODS, PERIOD_LABELS } from "./constants";
+import { PERIODS, PERIOD_LABELS, PRIMARY_PRICE_ORDER } from "./constants";
 import type { PriceMap, RentalPeriod } from "./types";
 
 const tl = new Intl.NumberFormat("tr-TR", {
@@ -26,12 +26,11 @@ export function formatPriceWithPeriod(value: number, period: RentalPeriod): stri
 }
 
 /**
- * İlanın gösterilecek "ana" fiyatını seçer: sefer > günlük > saatlik > haftalık > aylık.
- * Sefer fiyatı yalnız tır ilanlarında bulunur ve orada asıl fiyat odur.
+ * İlanın gösterilecek "ana" fiyatı. Sıra PRIMARY_PRICE_ORDER'dadır; aramadaki
+ * varsayılan fiyat sıralaması da aynı sırayı kullanır.
  */
 export function primaryPrice(prices: PriceMap): { value: number; period: RentalPeriod } | null {
-  const order: RentalPeriod[] = ["sefer", "gunluk", "saatlik", "haftalik", "aylik", "yillik"];
-  for (const period of order) {
+  for (const period of PRIMARY_PRICE_ORDER) {
     const value = prices[period];
     if (value != null) return { value, period };
   }
