@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { parseVoiceSearchAction } from "@/lib/actions/voice-search";
 import type { VoiceChip } from "@/lib/core/voice-search/types";
 import { Button } from "@/components/ui/Button";
-import { MicIcon, XIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, MicIcon, XIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { mergeTranscripts } from "./voice-transcript";
 
@@ -65,14 +65,24 @@ function recognitionCtor(): RecognitionCtor | undefined {
 
 const noopSubscribe = () => () => {};
 
-/** Sunucuda false; istemcide tarayıcı desteğine göre (hydration güvenli). */
-function useSpeechSupported(): boolean {
+/**
+ * İstemcide tarayıcı desteğine göre (hydration güvenli).
+ *
+ * Sunucuda varsayılan false — küçük ikon sonradan belirse kimse fark etmez.
+ * `optimistic` ise sunucuda true: büyük CTA sonradan belirseydi altındaki
+ * arama çubuğunu aşağı iterdi (kitlenin çoğu Chrome/Safari'de). Desteklemeyen
+ * azınlıkta (Firefox) düğme hydration'dan sonra kaybolur.
+ */
+function useSpeechSupported(optimistic: boolean): boolean {
   return useSyncExternalStore(
     noopSubscribe,
     () => recognitionCtor() !== undefined,
-    () => false,
+    () => optimistic,
   );
 }
+
+/** Örnek cümle — CTA ve dinleme paneli aynısını gösterir (mobilde kVoiceSearchExample). */
+export const VOICE_SEARCH_EXAMPLE = "İstanbul’da operatörlü JCB kepçe";
 
 /**
  * Konuşma bittikten sonra aramadan önce beklenen sessizlik.
@@ -109,8 +119,15 @@ interface State {
 
 const IDLE: State = { phase: "idle", transcript: "", chips: [] };
 
-export function VoiceSearchButton({ className }: { className?: string }) {
-  const supported = useSpeechSupported();
+/**
+ * `icon`: arama alanlarının yanındaki küçük mikrofon.
+ * `cta`: ana sayfanın birincil eylemi — kitle çoğunlukla sesle arayacak ve
+ * bunu ilk girişte görmeli.
+ */
+type Variant = "icon" | "cta";
+
+export function VoiceSearchButton({ className, variant = "icon" }: { className?: string; variant?: Variant }) {
+  const supported = useSpeechSupported(variant === "cta");
   const router = useRouter();
   const [state, setState] = useState<State>(IDLE);
   const recRef = useRef<Recognition | null>(null);
@@ -249,24 +266,50 @@ export function VoiceSearchButton({ className }: { className?: string }) {
   if (!supported) return null;
 
   const listening = state.phase === "listening";
+  const toggle = () => (listening ? recRef.current?.stop() : start());
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => (listening ? recRef.current?.stop() : start())}
-        aria-label={listening ? "Dinlemeyi bitir" : "Sesli arama"}
-        aria-pressed={listening}
-        title="Sesli arama"
-        className={cn(
-          "relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
-          listening && "bg-accent text-accent-fg hover:bg-accent-hover hover:text-accent-fg",
-          className,
-        )}
-      >
-        {listening && <span className="absolute inset-0 animate-ping rounded-full bg-accent/40" aria-hidden />}
-        <MicIcon size={18} className="relative" />
-      </button>
+      {variant === "cta" ? (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={listening ? "Dinlemeyi bitir" : `Sesle ara. Örneğin: ${VOICE_SEARCH_EXAMPLE}`}
+          aria-pressed={listening}
+          className={cn(
+            "group flex items-center gap-4 rounded-xl bg-accent py-3.5 pl-3.5 pr-4 text-left text-accent-fg shadow-xl shadow-black/30 transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-base",
+            className,
+          )}
+        >
+          {/* Koyu kare içinde mikrofon + dışa atan halka. Halka yalnız dikkat
+              çekmek için; "hareketi azalt" açıksa durur (motion-safe). */}
+          <span className="relative grid h-13 w-13 shrink-0 place-items-center rounded-lg bg-accent-fg text-accent" aria-hidden>
+            <span className="absolute inset-0 rounded-lg border-2 border-accent-fg/45 motion-safe:animate-ping" />
+            <MicIcon size={26} className="relative" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-2xl font-bold uppercase leading-snug">Sesle ara</span>
+            <span className="block text-sm font-medium text-accent-fg/75">“{VOICE_SEARCH_EXAMPLE}” deyin</span>
+          </span>
+          <ChevronRightIcon size={22} className="shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={listening ? "Dinlemeyi bitir" : "Sesli arama"}
+          aria-pressed={listening}
+          title="Sesli arama"
+          className={cn(
+            "relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+            listening && "bg-accent text-accent-fg hover:bg-accent-hover hover:text-accent-fg",
+            className,
+          )}
+        >
+          {listening && <span className="absolute inset-0 animate-ping rounded-full bg-accent/40" aria-hidden />}
+          <MicIcon size={18} className="relative" />
+        </button>
+      )}
 
       {/*
         Portal şart: düğme ana sayfada bir <form> içinde duruyor. Panel formun
@@ -304,7 +347,7 @@ export function VoiceSearchButton({ className }: { className?: string }) {
                   <p className="mt-1 break-words text-sm text-muted">“{state.transcript}”</p>
                 ) : (
                   listening && (
-                    <p className="mt-1 text-sm text-faint">Örn. “İstanbul’da operatörlü JCB kepçe”</p>
+                    <p className="mt-1 text-sm text-faint">Örn. “{VOICE_SEARCH_EXAMPLE}”</p>
                   )
                 )}
                 {state.phase === "error" && state.error && (

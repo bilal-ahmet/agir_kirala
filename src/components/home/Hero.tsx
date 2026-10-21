@@ -1,4 +1,5 @@
 import { SearchBar } from "./SearchBar";
+import { VoiceSearchButton } from "@/components/search/VoiceSearchButton";
 import { countActiveListings } from "@/lib/db/queries/listings";
 
 export async function Hero() {
@@ -31,7 +32,10 @@ export async function Hero() {
           </p>
         </div>
 
-        <SearchBar className="mt-8 max-w-4xl" />
+        {/* Kitle çoğunlukla sesle arıyor: birincil eylem bu. Desteklemeyen
+            tarayıcıda kendini gizler, yazılı arama tek başına kalır. */}
+        <VoiceSearchButton variant="cta" className="mt-8 w-full sm:w-auto sm:min-w-[26rem]" />
+        <SearchBar className="mt-3 max-w-4xl" />
       </div>
     </section>
   );

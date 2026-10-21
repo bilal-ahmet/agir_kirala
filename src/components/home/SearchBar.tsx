@@ -6,7 +6,6 @@ import { CATEGORIES } from "@/lib/categories";
 import { PROVINCE_NAMES } from "@/lib/locations";
 import { Button } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
-import { VoiceSearchButton } from "@/components/search/VoiceSearchButton";
 import { cn } from "@/lib/cn";
 
 export function SearchBar({ className }: { className?: string }) {
@@ -44,7 +43,8 @@ export function SearchBar({ className }: { className?: string }) {
           className={fieldCls}
           aria-label="Arama"
         />
-        <VoiceSearchButton className="mr-1" />
+        {/* Mikrofon burada yok: hemen üstteki "Sesle ara" ile yan yana iki
+            sesli arama girişi kafa karıştırırdı. */}
       </div>
 
       <div className="grid grid-cols-2 gap-2 md:flex md:gap-0">
@@ -77,7 +77,9 @@ export function SearchBar({ className }: { className?: string }) {
         </select>
       </div>
 
-      <Button type="submit" size="lg" className="md:ml-2 md:h-12">
+      {/* Nötr: ana sayfada vurgu rengi üstteki "Sesle ara"ya ait; iki sarı
+          blok göz için yarışıyordu. */}
+      <Button type="submit" size="lg" variant="solid" className="md:ml-2 md:h-12">
         <SearchIcon size={18} /> Ara
       </Button>
     </form>
