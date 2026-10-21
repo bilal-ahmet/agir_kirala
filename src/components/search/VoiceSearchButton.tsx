@@ -91,11 +91,14 @@ export const VOICE_SEARCH_EXAMPLE = "İstanbul’da operatörlü JCB kepçe";
  * "ekskavatör" deyip "...Ankara'da" diye düşünürken arama başlıyordu. Web
  * Speech API'de bekleme süresi ayarı yok; sürekli dinleyip sessizliği kendimiz
  * ölçüyoruz. Uzun tutulmadı — işini bitiren "Bitti"ye basabilir. Değerler
- * mobille aynı (pauseFor 3 sn, listenFor 12 sn).
+ * mobildeki pauseFor ile aynı (3 sn).
  */
 const SILENCE_MS = 3000;
-/** Bir dinleme oturumunun üst sınırı. */
-const MAX_LISTEN_MS = 12_000;
+/**
+ * Bir dinleme oturumunun üst sınırı. Kullanıcı konuşmayı bitirip susunca
+ * SILENCE_MS sonra zaten durulur; bu yalnız uzun, duraksamalı cümleler için pay.
+ */
+const MAX_LISTEN_MS = 20_000;
 
 const ERRORS: Record<string, string> = {
   "not-allowed": "Mikrofon izni verilmedi. Adres çubuğundaki simgeden mikrofona izin verin.",
