@@ -8,6 +8,7 @@ import type { VoiceChip } from "@/lib/core/voice-search/types";
 import { Button } from "@/components/ui/Button";
 import { MicIcon, XIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import { mergeTranscripts } from "./voice-transcript";
 
 /**
  * Sesli arama düğmesi.
@@ -72,6 +73,19 @@ function useSpeechSupported(): boolean {
     () => false,
   );
 }
+
+/**
+ * Konuşma bittikten sonra aramadan önce beklenen sessizlik.
+ *
+ * `continuous: false` iken Chrome ilk kısa sessizlikte kesiyordu: kullanıcı
+ * "ekskavatör" deyip "...Ankara'da" diye düşünürken arama başlıyordu. Web
+ * Speech API'de bekleme süresi ayarı yok; sürekli dinleyip sessizliği kendimiz
+ * ölçüyoruz. Uzun tutulmadı — işini bitiren "Bitti"ye basabilir. Değerler
+ * mobille aynı (pauseFor 3 sn, listenFor 12 sn).
+ */
+const SILENCE_MS = 3000;
+/** Bir dinleme oturumunun üst sınırı. */
+const MAX_LISTEN_MS = 12_000;
 
 const ERRORS: Record<string, string> = {
   "not-allowed": "Mikrofon izni verilmedi. Adres çubuğundaki simgeden mikrofona izin verin.",
@@ -154,7 +168,8 @@ export function VoiceSearchButton({ className }: { className?: string }) {
     const rec = new Ctor();
     rec.lang = "tr-TR";
     rec.interimResults = true;
-    rec.continuous = false;
+    // Sürekli: tarayıcı kısa duraksamada kesmesin; bitişi SILENCE_MS belirler.
+    rec.continuous = true;
     rec.maxAlternatives = 1;
 
     transcriptRef.current = "";
@@ -162,11 +177,17 @@ export function VoiceSearchButton({ className }: { className?: string }) {
     let failed = false;
     let retry = false;
 
+    // stop(): son sonucu teslim eder, ardından onend → arama.
+    let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+    const maxTimer = setTimeout(() => rec.stop(), MAX_LISTEN_MS);
+
     rec.onresult = (e) => {
-      const results = Array.from(e.results);
-      const text = results.map((r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
+      const text = mergeTranscripts(Array.from(e.results, (r) => r[0].transcript));
       transcriptRef.current = text;
       setState((s) => ({ ...s, transcript: text }));
+      // Her yeni kelime süreyi sıfırlar: sayaç son duyulan sesten başlar.
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => rec.stop(), SILENCE_MS);
     };
     rec.onerror = (e) => {
       if (e.error === "aborted") return;
@@ -180,6 +201,8 @@ export function VoiceSearchButton({ className }: { className?: string }) {
       setState((s) => ({ ...s, phase: "error", error: ERRORS[e.error] ?? "Ses tanınamadı. Tekrar deneyin." }));
     };
     rec.onend = () => {
+      clearTimeout(silenceTimer);
+      clearTimeout(maxTimer);
       recRef.current = null;
       if (cancelledRef.current) return;
       if (retry) {
@@ -197,6 +220,7 @@ export function VoiceSearchButton({ className }: { className?: string }) {
     try {
       rec.start();
     } catch {
+      clearTimeout(maxTimer);
       setState({ ...IDLE, phase: "error", error: "Ses tanıma başlatılamadı. Tekrar deneyin." });
     }
   }, [submit]);
