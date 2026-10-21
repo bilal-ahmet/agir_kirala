@@ -51,19 +51,32 @@ function relevantPriceExpr(periods?: RentalPeriod[]): SQL {
   return sql`coalesce(${sql.join(parts, sql`, `)})::numeric`;
 }
 
-/** FilterState → WHERE koşulları (filters.ts matches() ile eşdeğer). */
+/** Arama metnindeki en fazla bu kadar kelime koşula dönüşür. */
+const MAX_QUERY_WORDS = 6;
+
+/** FilterState → WHERE koşulları. */
 function buildConditions(f: FilterState): SQL[] {
   const c: SQL[] = [eq(listings.status, "aktif")];
 
   if (f.q) {
-    const pat = `%${f.q}%`;
-    c.push(
-      or(
-        sql`${listings.title} ilike ${pat}`,
-        sql`${listings.brand} ilike ${pat}`,
-        sql`${listings.model} ilike ${pat}`,
-      )!,
-    );
+    /**
+     * Her kelime AYRI aranır, hepsi geçmeli (başlık, marka ya da model).
+     * Tüm metni tek ifade olarak aramak "hidrolik kırıcı"yı "Kırıcılı hidrolik
+     * ekskavatör" başlığında bulamıyor, "PC 210" ile "PC210"u eşleştiremiyordu.
+     * Kelime farklı alanlarda da olabilir: "JCB 3CX" → marka JCB, model 3CX.
+     */
+    const words = f.q.split(/\s+/).filter(Boolean).slice(0, MAX_QUERY_WORDS);
+    for (const w of words) {
+      // Kullanıcının yazdığı % ve _ joker değil, harf olarak aranır.
+      const pat = `%${w.replace(/[\\%_]/g, "\\$&")}%`;
+      c.push(
+        or(
+          sql`${listings.title} ilike ${pat}`,
+          sql`${listings.brand} ilike ${pat}`,
+          sql`${listings.model} ilike ${pat}`,
+        )!,
+      );
+    }
   }
   if (f.kategori) c.push(eq(listings.categorySlug, f.kategori));
   if (f.altKategori) c.push(eq(listings.subCategorySlug, f.altKategori));

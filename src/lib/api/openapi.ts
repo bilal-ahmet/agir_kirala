@@ -316,7 +316,8 @@ const LISTING_QUERY_PARAMS: Json[] = [
     in: "query",
     required: false,
     schema: { type: "string" },
-    description: "Serbest metin araması (başlık, marka, model).",
+    description:
+      "Serbest metin araması (başlık, marka, model). Kelimeler ayrı ayrı aranır, her kelime bu alanlardan birinde geçmeli; sıra ve bitişiklik önemsizdir.",
   },
   {
     name: "kategori",

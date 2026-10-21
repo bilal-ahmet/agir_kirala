@@ -28,6 +28,8 @@ import * as coreDevices from "@/lib/core/devices";
 import * as coreSessions from "@/lib/core/sessions";
 import { sendNotifications } from "@/lib/notify/fcm";
 import { notificationData } from "@/lib/notify/types";
+import { listingsExist } from "@/lib/db/queries/listings";
+import { parseFilters } from "@/lib/filter-params";
 
 // ───────── Yardımcılar ─────────
 
@@ -708,5 +710,42 @@ describe("FCM gonderimi", () => {
       { userId: owner.id, title: "x", body: "y", data: notificationData("message", "c") },
     ]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// ───────── Arama metni (q) ─────────
+//
+// q kelime kelime aranır, her kelime başlık/marka/modelde geçmeli. Önceden
+// tüm metin tek ifade aranıyordu: sıra ya da bitişiklik farkı sonucu sıfırlıyordu.
+
+describe("arama metni", () => {
+  const tag = `zq${randomUUID().slice(0, 8)}`;
+
+  beforeAll(async () => {
+    value(
+      await coreListings.createListing(
+        owner,
+        listingInput({ title: `Kırıcılı ${tag} hidrolik ekskavatör`, brand: "Komatsu", model: "PC210" }),
+      ),
+    );
+  });
+
+  const exists = (q: string) => listingsExist(parseFilters({ q }));
+
+  it("kelimeler sıradan ve bitişiklikten bağımsız eşleşir", async () => {
+    expect(await exists(`hidrolik kırıcı ${tag}`)).toBe(true);
+  });
+
+  it("kelimeler farklı alanlarda olabilir (marka + model + başlık)", async () => {
+    expect(await exists(`Komatsu PC210 ${tag}`)).toBe(true);
+  });
+
+  it("her kelime geçmeli", async () => {
+    expect(await exists(`${tag} vinç`)).toBe(false);
+  });
+
+  it("% ve _ joker değil harf olarak aranır", async () => {
+    expect(await exists(`${tag} %`)).toBe(false);
+    expect(await exists(`${tag} _`)).toBe(false);
   });
 });
