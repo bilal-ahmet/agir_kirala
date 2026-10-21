@@ -44,12 +44,29 @@ const FILLERS = new Set([
   "sahibinden", "kiralayan", "santiye", "santiyem", "proje", "projem", "lazim", "gerek",
   "gerekli", "gerekiyor", "ihtiyac", "ihtiyacim", "istiyorum", "istiyoruz", "isterim", "ariyorum",
   "ariyoruz", "bakiyorum", "bakiyoruz", "model", "marka", "kategori", "tip", "tipi", "turu",
+  // İstek fiilleri ve bağlaçlar: "… getir", "… olsun", "hepsini göster".
+  "ver", "verir", "verin", "versene", "ac", "olsun", "olsa", "olmali", "gelsin", "gor", "goreyim",
+  "gorelim", "bakalim", "tum", "butun", "hepsi", "hepsini", "her", "sadece", "yalniz", "yalnizca",
+  "gibi", "olarak", "gore", "cesit", "cesitli", "secenek", "secenekler", "secenekleri", "sey",
 ]);
-const FILLER_PREFIXES = ["kirala", "kiraliy", "istiyo", "ariyo", "bakiyo", "gerekiy", "lazim"];
+
+/**
+ * Ekli biçimleri de dolgu olan kökler. Tam eşleşme yetmiyordu: "tır
+ * kategorisinde Mercedes ve Volvo markalarını getir" cümlesinde
+ * "kategorisinde", "markalarını" ve "getir" serbest metin aramasına (q)
+ * sızıyor, sonuç sıfıra düşüyordu. Kök kısa ve belirsizse (ör. "ara" →
+ * "araba") buraya girmez, FILLERS'ta tam biçimiyle durur.
+ */
+const FILLER_PREFIXES = [
+  "kirala", "kiraliy", "istiyo", "ariyo", "bakiyo", "gerekiy", "lazim",
+  "getir", "goster", "listele", "sirala", "bulabil", "bulur", "bulsa", "arayabil", "aratabil",
+  "bakabil", "bakar", "kategori", "marka", "model", "ilan",
+];
 
 function isFiller(key: string): boolean {
-  if (FILLERS.has(key)) return true;
-  return FILLER_PREFIXES.some((p) => key.startsWith(p));
+  if (FILLER_PREFIXES.some((p) => key.startsWith(p))) return true;
+  // "makineleri", "araçları", "modeli": ek alınınca dolgu köküne iner.
+  return stems(key).some((s) => FILLERS.has(s));
 }
 
 // ───────── Kalıp altyapısı ─────────
@@ -357,14 +374,17 @@ export function parseWithRules(text: string): RulesResult {
   phaseC(ctx);
   resolveMeasures(ctx);
 
-  const remainder = tokens.filter((t, i) => !ctx.used[i] && !isFiller(t.key)).map((t) => t.raw);
-  const words = remainder.filter((w) => !looksLikeModel(w));
-  const models = remainder.filter(looksLikeModel);
+  const left = tokens.filter((t, i) => !ctx.used[i] && !isFiller(t.key));
+  const remainder = left.map((t) => t.raw);
+  // Sözle söylenen sayı rakamla aranır: ilanda "üç yüz yirmi" değil "320" yazar.
+  const searchable = left.map((t) => (t.num !== undefined ? t.key : t.raw));
+  const words = searchable.filter((w) => !looksLikeModel(w));
+  const models = searchable.filter(looksLikeModel);
 
-  if (remainder.length) {
+  if (searchable.length) {
     // Model kodu varsa yalnız onu ara: "JCB 3CX" → marka=JCB, q=3CX. Kod yoksa
     // kalan kelimeler bugünkü metin aramasıyla aynı şekilde q olur.
-    ctx.filters.q = (models.length ? models : remainder).join(" ");
+    ctx.filters.q = (models.length ? models : searchable).join(" ");
   }
 
   const low = (ctx.recognized === 0 && words.length > 0) || words.length >= 2;

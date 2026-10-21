@@ -182,6 +182,53 @@ describe("güven düzeyi", () => {
   });
 });
 
+// Kullanıcı geri bildirimi: "getir" gibi komut kelimeleri filtre (q) olarak
+// alınıyordu. q tam ifade olarak aranır; tek bir fazla kelime sonucu sıfırlar.
+describe("komut ve bağlam kelimeleri aramaya girmez", () => {
+  it("tır kategorisinde mercedes ve volvo markalarını getir", () => {
+    const r = parseWithRules("tır kategorisinde mercedes ve volvo markalarını getir");
+    expect(toParams(r.filters)).toEqual({ kategori: "tir", marka: "Mercedes-Benz,Volvo" });
+    expect(r.remainder).toEqual([]);
+    // Her şey anlaşıldı: LLM'e gitmeye gerek yok.
+    expect(r.confidence).toBe("high");
+  });
+
+  it.each([
+    "Ankara'da vinç getir",
+    "Ankara'da vinç getirir misin",
+    "Ankara'da vinç getirebilir misin",
+    "Ankara'da vinç göstersene",
+    "Ankara'da vinç ilanlarını listele",
+    "Ankara'da vinç ilanlarını göster bana",
+    "Ankara'da vinç bulabilir misin",
+    "Ankara'daki tüm vinçleri getir",
+    "Ankara'da vinç olsun",
+  ])("%s → yalnız il + kategori", (text) => {
+    expect(params(text)).toEqual({ il: "Ankara", kategori: "vinc-platform" });
+  });
+
+  it("ekli dolgu biçimleri de atılır (makineleri, araçları, modeli)", () => {
+    expect(params("Ankara'daki makineleri getir")).toEqual({ il: "Ankara" });
+    expect(params("JCB modeli kepçe araçları")).toEqual({ marka: "JCB", kategori: "hafriyat", altKategori: "beko-loder" });
+  });
+
+  it("'araç' Kastamonu'nun ilçesine çevrilmez; il söylenirse ilçe olarak kalır", () => {
+    expect(params("Ankara'da araç getir")).toEqual({ il: "Ankara" });
+    expect(params("Kastamonu Araç vinç")).toEqual({ il: "Kastamonu", ilce: "Araç", kategori: "vinc-platform" });
+  });
+
+  it("anlamlı anahtar kelime ve model kodu korunur", () => {
+    expect(params("İstanbul hidrolik kırıcı getir")).toEqual({ il: "İstanbul", q: "hidrolik kırıcı" });
+    expect(params("JCB 3CX getir")).toEqual({ marka: "JCB", q: "3CX" });
+  });
+
+  it("sözle söylenen model numarası rakamla aranır, LLM'e gerek kalmaz", () => {
+    const r = parseWithRules("katerpilar üç yüz yirmi modelini göster");
+    expect(toParams(r.filters)).toEqual({ marka: "Caterpillar", q: "320" });
+    expect(r.confidence).toBe("high");
+  });
+});
+
 describe("arama sözleşmesiyle uyum", () => {
   const SAMPLES = [
     "istanbulda kiralık kepçe",

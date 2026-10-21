@@ -127,7 +127,9 @@ const BRAND_ALIASES: Record<string, string[]> = {
  * söylenirlerse ("Rize Pazar") yine tanınırlar.
  */
 const COMMON_WORD_DISTRICTS = new Set(
-  ["merkez", "kale", "cay", "orta", "pazar", "guney", "bala", "hamur", "ulus", "evren", "kemer", "sur", "yenice", "bozkurt", "aksu", "kiraz", "uzum", "elma", "yaprakli", "ova"].map(phraseKey),
+  ["merkez", "kale", "cay", "orta", "pazar", "guney", "bala", "hamur", "ulus", "evren", "kemer", "sur", "yenice", "bozkurt", "aksu", "kiraz", "uzum", "elma", "yaprakli", "ova",
+    // Kastamonu/Araç: bu sitede "araç" hemen hep taşıt demek ("araç getir").
+    "arac"].map(phraseKey),
 );
 
 export interface Lexicon {
