@@ -1,12 +1,14 @@
 /**
  * Kural tabanlı sesli arama ayrıştırıcısı. Ağ yok, DB yok, ~1 ms.
  *
- * Üç aşama, her biri eşlediği kelimeleri "tüketir" ki aynı kelime iki kez
+ * Dört aşama, her biri eşlediği kelimeleri "tüketir" ki aynı kelime iki kez
  * yorumlanmasın:
- *   A) Çok kelimeli kalıplar: fiyat, model yılı, ölçü, sıralama, operatör…
+ *   A) Çok kelimeli kalıplar: fiyat (aralık dahil), model yılı, ölçü, sıralama,
+ *      operatör… İki seçenekli filtreler ardından gelen olumsuzlukla döner.
  *   B) Sözlük: en uzun ifade önce ("beko loder" tek parça, "beko" ayrı değil).
  *   C) Tek kelimelik kalıplar: yakıt. Sözlükten SONRA koşar, yoksa "elektrikli"
  *      kelimesi "elektrikli forklift" alt kategorisini bölerdi.
+ *   D) Bulanık eşleme: kalan kelimelerde konuşma tanıma yazım hataları.
  * Kalan anlamlı kelimeler `remainder` olur. Model kodları ("3CX", "PC210")
  * burada kalır ve serbest metin araması (q) olarak kullanılır.
  */
@@ -48,6 +50,18 @@ const FILLERS = new Set([
   "ver", "verir", "verin", "versene", "ac", "olsun", "olsa", "olmali", "gelsin", "gor", "goreyim",
   "gorelim", "bakalim", "tum", "butun", "hepsi", "hepsini", "her", "sadece", "yalniz", "yalnizca",
   "gibi", "olarak", "gore", "cesit", "cesitli", "secenek", "secenekler", "secenekleri", "sey",
+  // Konuşma dolgusu, hitap, selamlaşma: STT bunları da metne yazar.
+  "acaba", "yani", "abi", "abla", "kardes", "kardesim", "usta", "hocam", "merhaba", "selam",
+  "selamlar", "gunler", "iyi", "rica", "etsem", "ederim", "tamam", "peki", "evet", "falan", "filan",
+  "ee", "eee", "hmm", "mm", "ii", "birlikte", "beraber", "daha", "cok", "biraz", "baya",
+  // Nitelik sıfatları: ilan metninde aranırsa sonucu sıfırlar, filtre karşılıkları yok.
+  "buyuk", "buyukce", "kucuk", "orta", "boy", "musait", "bos", "kaliteli", "saglam", "temiz",
+  "bakimli", "guzel", "yeni", "eski", "hizli", "hizlica", "yakinim", "yakinimda", "yakinimdaki",
+  "genis", "uzun", "kisa", "agir", "hafif", "az", "fazla",
+  // Zaman: "salı günü lazım", "haftaya". Süre kalıpları ("3 gün") önce tüketir.
+  "pazartesi", "sali", "carsamba", "persembe", "cuma", "cumartesi", "gun", "gunu", "haftaya", "haftasonu",
+  // Sayıdan ayrılan hâl ekleri (bkz. normalize.ts → splitNumberSuffix).
+  "den", "dan", "ten", "tan", "lik", "luk", "ya", "e", "a",
 ]);
 
 /**
@@ -60,10 +74,25 @@ const FILLERS = new Set([
 const FILLER_PREFIXES = [
   "kirala", "kiraliy", "istiyo", "ariyo", "bakiyo", "gerekiy", "lazim",
   "getir", "goster", "listele", "sirala", "bulabil", "bulur", "bulsa", "arayabil", "aratabil",
-  "bakabil", "bakar", "kategori", "marka", "model", "ilan",
+  "bakabil", "bakar", "kategori", "marka", "model", "ilan", "istedi", "istiyor",
 ];
 
+/**
+ * Olumsuzluk: bir filtreden SONRA gelir ("JCB olmasın", "nakliye istemiyorum",
+ * "İstanbul hariç"). Görmezden gelinseydi kullanıcı istediğinin tam tersini
+ * görürdü: "operatör istemiyorum" operatörlü ilanları getiriyordu.
+ */
+const NEGATOR_PREFIXES = [
+  "olmasin", "olmayan", "istemiyo", "istemem", "istemez", "haric", "disinda", "degil", "olmadan",
+];
+
+function isNegator(key: string): boolean {
+  return NEGATOR_PREFIXES.some((p) => key.startsWith(p));
+}
+
 function isFiller(key: string): boolean {
+  // Eşleşmenin arkasında kalmayan olumsuzluk ("istemiyorum" tek başına) de q'ya girmez.
+  if (isNegator(key)) return true;
   if (FILLER_PREFIXES.some((p) => key.startsWith(p))) return true;
   // "makineleri", "araçları", "modeli": ek alınınca dolgu köküne iner.
   return stems(key).some((s) => FILLERS.has(s));
@@ -92,7 +121,12 @@ interface Ctx {
  * `apply` false dönerse (ör. geçersiz yıl) hiçbir şey tüketilmez.
  * `silent`: tüketir ama tanınan filtre saymaz ("3 tane" gibi gürültü).
  */
-function scan(ctx: Ctx, re: RegExp, apply: (m: RegExpExecArray) => boolean, silent = false): void {
+function scan(
+  ctx: Ctx,
+  re: RegExp,
+  apply: (m: RegExpExecArray, idx: number[]) => boolean,
+  silent = false,
+): void {
   const starts: number[] = [];
   let text = "";
   ctx.tokens.forEach((t, i) => {
@@ -110,7 +144,7 @@ function scan(ctx: Ctx, re: RegExp, apply: (m: RegExpExecArray) => boolean, sile
       if (s < to && e > from) idx.push(i);
     });
     if (!idx.length || idx.some((i) => ctx.used[i])) continue;
-    if (apply(m as RegExpExecArray)) {
+    if (apply(m as RegExpExecArray, idx)) {
       for (const i of idx) ctx.used[i] = true;
       if (!silent) ctx.recognized++;
     }
@@ -129,10 +163,57 @@ function addUnique<T>(list: T[], v: T): boolean {
 
 const NUM = String.raw`(\d+(?:\.\d+)?)`;
 
+/**
+ * Birimsiz bir tutarın ardından bunlardan biri gelirse sayı fiyat değildir:
+ * ölçü ("en az 20 ton"), model yılı ("en az 2015 model") ya da süre ("3 gün").
+ */
+const NOT_PRICE_AFTER =
+  String.raw`(?! (?:ton[a-z]*|kilo[a-z]*|kg|kva[a-z]*|metre[a-z]*|mt|m|m3|kup|metrekup[a-z]*|beygir[a-z]*|hp|bg|` +
+  String.raw`model[a-z]*|yil[a-z]*|sene[a-z]*|saat[a-z]*|gun[a-z]*|hafta[a-z]*|ay[a-z]*|sefer[a-z]*|tane|adet)(?![a-z0-9]))`;
+
+/**
+ * Eşleşmenin hemen ardındaki olumsuzluğu tüketir. Araya en fazla iki dolgu
+ * girebilir: "JCB markası olmasın", "ikinci el olanları istemiyorum".
+ */
+function takeNegation(ctx: Ctx, last: number): boolean {
+  for (let k = last + 1; k < ctx.tokens.length && k <= last + 3; k++) {
+    if (ctx.used[k]) return false;
+    const key = ctx.tokens[k].key;
+    if (isNegator(key)) {
+      ctx.used[k] = true;
+      return true;
+    }
+    if (!isFiller(key)) return false;
+  }
+  return false;
+}
+
 // ───────── A) Çok kelimeli kalıplar ─────────
 
 function phaseA(ctx: Ctx): void {
   const f = ctx.filters;
+
+  const isYear = (n: number) => n >= 1980 && n <= MAX_YEAR + 1;
+  // Birimsiz tutar ancak bu kadar büyükse fiyattır ("en fazla 50" bir fiyat değil).
+  const price = (n: number) => n >= 100;
+  const minPrice = (n: number) => price(n) && set(f, "minFiyat", n);
+  const maxPrice = (n: number) => price(n) && set(f, "maxFiyat", n);
+
+  // Aralık: "10 bin ile 20 bin arası", "2015 ile 2020 arası". İki ucu da yıl
+  // gibiyse ve para birimi söylenmediyse model yılı aralığıdır. Tek sınırlı
+  // kalıplardan ÖNCE koşar, yoksa uçlardan biri tek başına yakalanırdı.
+  scan(
+    ctx,
+    /(\d+)(?: (?:tl|lira)[a-z]*)?(?: (?:ile|ve|ila))? (\d+)(?: (?:tl|lira)[a-z]*)? (?:arasi[a-z]*|aralig[a-z]*|aralik[a-z]*)/,
+    (m) => {
+      const [lo, hi] = [Number(m[1]), Number(m[2])].sort((a, b) => a - b);
+      if (lo === hi) return false;
+      const money = /tl|lira/.test(m[0]);
+      if (!money && isYear(lo) && isYear(hi)) return set(f, "minYil", lo) && set(f, "maxYil", hi);
+      if (!price(hi)) return false;
+      return set(f, "minFiyat", lo) && set(f, "maxFiyat", hi);
+    },
+  );
 
   // Fiyat: önce alt sınır ("en az 5000 lira", "5000 liradan fazla"), sonra üst sınır.
   scan(
@@ -140,19 +221,44 @@ function phaseA(ctx: Ctx): void {
     /(?:en az|minimum|min|asgari) (\d+) (?:tl|lira)[a-z]*|(\d+) (?:tl|lira)[a-z]* (?:ve )?(?:ustu|uzeri|ustunde|uzerinde|fazla)/,
     (m) => set(f, "minFiyat", Number(m[1] ?? m[2])),
   );
+  // Birimsiz: "en az 5000", "5 binden fazla". Ardından birim/yıl gelirse ölçü
+  // ya da model yılıdır ("en az 20 ton", "en az 2015 model"), fiyat değil.
+  scan(ctx, new RegExp(`(?:en az|minimum|asgari) (\\d+)${NOT_PRICE_AFTER}`), (m) => minPrice(Number(m[1])));
+  scan(ctx, /(\d+)(?: (?:den|dan|ten|tan))? (?:fazla|yukari[a-z]*|pahali)/, (m) => minPrice(Number(m[1])));
+
   scan(
     ctx,
     /(?:(?:en fazla|en cok|maksimum|max|azami|butcem|butce) )?(\d+) (?:tl|lira)[a-z]*(?: (?:kadar|altinda|alti|asmayan|asmasin))?/,
     (m) => set(f, "maxFiyat", Number(m[1])),
   );
+  scan(ctx, new RegExp(`(?:en fazla|en cok|maksimum|max|azami) (\\d+)${NOT_PRICE_AFTER}`), (m) => maxPrice(Number(m[1])));
+  // "5 binden ucuz", "5000'den az", "5000 altı", "10 bine kadar".
+  scan(ctx, /(\d+)(?: (?:den|dan|ten|tan))? (?:ucuz[a-z]*|az|asagi[a-z]*|dusuk)/, (m) => maxPrice(Number(m[1])));
+  scan(ctx, /(\d+) (?:alti|altinda|altina|altindaki)/, (m) => maxPrice(Number(m[1])));
+  scan(ctx, /(\d+)(?: (?:e|a|ye|ya))? kadar/, (m) => maxPrice(Number(m[1])));
+  // Bütçe: "bütçem 10 bin", "10 bin bütçem var".
+  scan(ctx, /butce[a-z]*(?: (?:var|olarak))? (\d+)|(\d+)(?: (?:tl|lira)[a-z]*)? (?:lik )?butce[a-z]*/, (m) =>
+    maxPrice(Number(m[1] ?? m[2])),
+  );
 
-  // Model yılı: "2020 model", "2018 ve üzeri", "2019 yılı sonrası".
-  const year = (y: number) => {
-    if (y < 1980 || y > MAX_YEAR + 1) return false;
-    return set(f, "minYil", y);
-  };
-  scan(ctx, /((?:19|20)\d{2}) (?:model[a-z]*|yil[a-z]*)(?: (?:ve )?(?:uzeri|sonrasi|ustu|sonra|yukarisi))?/, (m) => year(Number(m[1])));
-  scan(ctx, /((?:19|20)\d{2}) (?:ve )?(?:uzeri|sonrasi|ustu|sonra|yukarisi)/, (m) => year(Number(m[1])));
+  // Model yılı: "2020 model", "2018 ve üzeri", "2018'den yeni", "2015 öncesi".
+  const year = (key: "minYil" | "maxYil", y: number) => isYear(y) && set(f, key, y);
+  scan(ctx, /((?:19|20)\d{2}) (?:model[a-z]*|yil[a-z]*)(?: (?:ve )?(?:uzeri|sonrasi|ustu|sonra|yukarisi))?/, (m) => year("minYil", Number(m[1])));
+  scan(
+    ctx,
+    /((?:19|20)\d{2})(?: (?:den|dan|ten|tan))? (?:ve )?(?:daha )?(?:yeni|uzeri|sonra[a-z]*|ustu|yukari[a-z]*)/,
+    (m) => year("minYil", Number(m[1])),
+  );
+  scan(
+    ctx,
+    /((?:19|20)\d{2})(?: (?:den|dan|ten|tan))? (?:ve )?(?:daha )?(?:eski|once[a-z]*)/,
+    (m) => year("maxYil", Number(m[1])),
+  );
+  // Göreli: "son 5 yılın", "son 3 senelik". Bu yıl dahil N yıl.
+  scan(ctx, /son (\d+) (?:yil[a-z]*|sene[a-z]*)/, (m) => {
+    const n = Number(m[1]);
+    return n >= 1 && n <= 40 && set(f, "minYil", MAX_YEAR - n + 1);
+  });
 
   // Ölçüler: "20 tonluk", "500 kVA", "16 metre", "1.5 metreküp". Hangi teknik
   // alana denk geldiği kategoriye bağlı; kategori bilinince çözülür.
@@ -182,27 +288,40 @@ function phaseA(ctx: Ctx): void {
   scan(ctx, /(?:en )?az kullanilmis|dusuk (?:saat|kilometre|km)[a-z]*/, () => sort("kullanim-az"));
   scan(ctx, /(?:en )?(?:iyi|yuksek) puan[a-z]*|en guvenilir[a-z]*/, () => sort("puan"));
 
+  // İki seçenekli filtreler: ardından olumsuzluk gelirse değer tersine döner
+  // ("ikinci el olmasın" → sıfır, "operatör istemiyorum" → operatörsüz).
+  const binary = <K extends "durum" | "nakliye" | "operator">(key: K, value: VoiceFilters[K], opposite: VoiceFilters[K]) =>
+    (_m: RegExpExecArray, idx: number[]) => set(f, key, takeNegation(ctx, idx[idx.length - 1]) ? opposite : value);
+
   // İlan durumu.
-  scan(ctx, /ikinci el|2 el|2el/, () => set(f, "durum", "ikinci_el"));
-  scan(ctx, /sifir(?: km| ayarinda)?/, () => set(f, "durum", "sifir"));
+  scan(ctx, /ikinci el|2 el|2el/, binary("durum", "ikinci_el", "sifir"));
+  scan(ctx, /sifir(?: km| ayarinda)?/, binary("durum", "sifir", "ikinci_el"));
 
   // Nakliye: olumsuzlar önce ("nakliye yok" → "nakliye" ile karışmasın).
-  const nakliye = (v: TransportFilter) => set(f, "nakliye", v);
-  scan(ctx, /nakliyesiz|nakliye (?:yok|haric|olmadan)|tasima (?:yok|haric)/, () => nakliye("yok"));
-  scan(ctx, /nakliye(?:li| dahil| ile| olsun)?|tasima dahil|tasimali/, () => nakliye("var"));
+  const NO_TRANSPORT = /nakliyesiz|nakliye (?:yok|haric|olmadan)|tasima (?:yok|haric)/;
+  scan(ctx, NO_TRANSPORT, binary("nakliye", "yok" as TransportFilter, "var"));
+  scan(ctx, /nakliye(?:li| dahil| ile| olsun)?|tasima dahil|tasimali/, binary("nakliye", "var" as TransportFilter, "yok"));
 
   // Operatör.
-  const operator = (v: OperatorFilter) => set(f, "operator", v);
-  scan(ctx, /operatorsuz|operator(?:u)? (?:olmadan|yok|haric)|soforsuz|kendim kullan[a-z]*/, () => operator("operatorsuz"));
-  scan(ctx, /operatorlu|operator(?:u)? (?:ile|dahil|olsun)|operatoruyle|operator|soforlu/, () => operator("operatorlu"));
+  scan(
+    ctx,
+    /operatorsuz|operator(?:u)? (?:olmadan|yok|haric)|soforsuz|kendim kullan[a-z]*/,
+    binary("operator", "operatorsuz" as OperatorFilter, "operatorlu"),
+  );
+  scan(
+    ctx,
+    /operatorlu|operator(?:u)? (?:ile|dahil|olsun)|operatoru?yle|operatorle|operator|soforlu|sofor(?:u)?(?:yle| ile)|soforle/,
+    binary("operator", "operatorlu" as OperatorFilter, "operatorsuz"),
+  );
 
-  // Periyot: "günlük", "aylığına", "3 aylık", "10 gün".
+  // Periyot: "günlük", "aylığına", "3 aylık", "10 gün", "ayda", "günde".
+  // Tek başına "hafta"/"ay" periyot değildir ("bu hafta lazım").
   const PERIOD: [RegExp, RentalPeriod][] = [
-    [/\d+ saat[a-z]*|saatli[a-z]*/, "saatlik"],
-    [/\d+ gun[a-z]*|gunlu[a-z]*/, "gunluk"],
-    [/\d+ hafta[a-z]*|haftali[a-z]*/, "haftalik"],
-    [/\d+ ay(?:li[a-z]*|lig[a-z]*)?|ayli[a-z]*/, "aylik"],
-    [/\d+ yil(?:li[a-z]*|lig[a-z]*)?|yilli[a-z]*/, "yillik"],
+    [/\d+ saat[a-z]*|saatli[a-z]*|saati|saatte/, "saatlik"],
+    [/\d+ gun[a-z]*|gunlu[a-z]*|gunde/, "gunluk"],
+    [/\d+ hafta[a-z]*|haftali[a-z]*|haftada/, "haftalik"],
+    [/\d+ ay(?:li[a-z]*|lig[a-z]*)?|ayli[a-z]*|ayda/, "aylik"],
+    [/\d+ yil(?:li[a-z]*|lig[a-z]*)?|yilli[a-z]*|yilda|senelik|senede/, "yillik"],
     [/sefer bas[a-z]*|seferlik|tek sefer|\d+ sefer[a-z]*/, "sefer"],
   ];
   for (const [re, p] of PERIOD) scan(ctx, re, () => addUnique(f.periyot, p));
@@ -213,10 +332,17 @@ function phaseA(ctx: Ctx): void {
 
 // ───────── B) Sözlük eşleme ─────────
 
-function phaseB(ctx: Ctx): void {
+/** Sözlük eşleşmesi + cümledeki yeri (olumsuzluk ve sıra için). */
+interface Match {
+  entries: LexEntry[];
+  start: number;
+  end: number;
+}
+
+function phaseB(ctx: Ctx): Match[] {
   const lex = lexicon();
   const { tokens, used } = ctx;
-  const matches: LexEntry[][] = [];
+  const matches: Match[] = [];
 
   for (let i = 0; i < tokens.length; i++) {
     if (used[i]) continue;
@@ -230,14 +356,87 @@ function phaseB(ctx: Ctx): void {
       }
       if (found) {
         for (let k = 0; k < n; k++) used[i + k] = true;
-        matches.push(found);
+        matches.push({ entries: found, start: i, end: i + n - 1 });
         i += n - 1;
         break;
       }
     }
   }
+  return matches;
+}
 
-  resolve(ctx, matches);
+// ───────── D) Bulanık eşleme (konuşma tanıma yazım hataları) ─────────
+
+/**
+ * Tek kelimelik kategori/alt kategori/marka adları. İl ve ilçeler bilerek
+ * dışarıda: 970 ilçe adı gündelik kelimelere bir harf uzaklıkta çok sık düşer.
+ * 6 harften kısa adlar da dışarıda ("genie" ~ "geniş", "dorse" ~ "dörse").
+ */
+let fuzzyPool: { key: string; entries: LexEntry[] }[] | null = null;
+
+function fuzzyCandidates() {
+  fuzzyPool ??= [...lexicon().entries]
+    .filter(
+      ([key, entries]) =>
+        key.length >= 6 &&
+        !key.includes(" ") &&
+        !/\d/.test(key) &&
+        entries.every((e) => e.kind === "kategori" || e.kind === "altKategori" || e.kind === "marka"),
+    )
+    .map(([key, entries]) => ({ key, entries }));
+  return fuzzyPool;
+}
+
+/** Komşu harf yer değiştirmesini de tek hata sayan düzenleme uzaklığı (OSA). */
+export function editDistance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return d[a.length][b.length];
+}
+
+/**
+ * Sözlükte bulunamayan kelimeyi en yakın ada bağlar: "forkilift" → forklift,
+ * "jenaratör" → jeneratör, "kompürsör" → kompresör, "skania" → Scania.
+ * 6–8 harfte 1, 9+ harfte 2 hataya izin verilir; yalnız TEK bir anlama en
+ * yakın aday varsa kabul edilir (iki ada eşit uzaklıktaysa tahmin yapılmaz).
+ * Her yazım hatasını eş anlamlı olarak tek tek eklemek bitmeyen bir iş olurdu.
+ */
+function phaseFuzzy(ctx: Ctx): Match[] {
+  const out: Match[] = [];
+  ctx.tokens.forEach((t, i) => {
+    if (ctx.used[i] || t.key.length < 6 || /\d/.test(t.key) || isFiller(t.key)) return;
+    let best = Infinity;
+    let winners: LexEntry[][] = [];
+    for (const stem of stems(t.key)) {
+      if (stem.length < 6) continue;
+      const allowed = stem.length >= 9 ? 2 : 1;
+      for (const c of fuzzyCandidates()) {
+        if (Math.abs(c.key.length - stem.length) > allowed) continue;
+        const dist = editDistance(stem, c.key);
+        if (dist > allowed || dist > best) continue;
+        if (dist < best) {
+          best = dist;
+          winners = [];
+        }
+        winners.push(c.entries);
+      }
+    }
+    const distinct = new Set(winners.map((w) => JSON.stringify(w)));
+    if (winners.length && distinct.size === 1) {
+      ctx.used[i] = true;
+      out.push({ entries: winners[0], start: i, end: i });
+    }
+  });
+  return out;
 }
 
 function first<K extends LexEntry["kind"]>(list: LexEntry[], kind: K) {
@@ -251,13 +450,23 @@ function first<K extends LexEntry["kind"]>(list: LexEntry[], kind: K) {
  * ilçesi, "Bobcat" hem marka hem alt kategori, "Yenişehir" üç ilin ilçesi.
  * İlçe kararı il bilindikten SONRA verilir; kullanıcı "Çankaya Ankara" gibi ili
  * sonra da söyleyebilir.
+ *
+ * Olumsuzlanan konum/kategori/marka ("JCB olmasın", "İstanbul hariç") hiç
+ * uygulanmaz: aramada hariç tutma filtresi yok, geniş sonuç ters sonuçtan iyidir.
  */
-function resolve(ctx: Ctx, matches: LexEntry[][]): void {
+function resolve(ctx: Ctx, sorted: Match[]): void {
   const f = ctx.filters;
   const lex = lexicon();
   const deferred: LexEntry[][] = [];
+  // "kepçe veya ekskavatör": aynı kategoriden iki alt tür → alt tür seçilmez,
+  // kategori kalır. Birini seçmek diğerini sessizce dışarıda bırakırdı.
+  let subConflict = false;
 
-  for (const entries of matches) {
+  for (const { entries, end } of sorted) {
+    if (takeNegation(ctx, end)) {
+      ctx.recognized++;
+      continue;
+    }
     const il = first(entries, "il");
     const sub = first(entries, "altKategori");
     const cat = first(entries, "kategori");
@@ -269,9 +478,12 @@ function resolve(ctx: Ctx, matches: LexEntry[][]): void {
     } else if (sub) {
       // Alt kategori kategoriyi belirler; önce yalnız kategori söylendiyse
       // ("vinç … hiyap") daha özel olan kazanır.
-      if (!f.altKategori) {
+      if (!f.altKategori && !subConflict) {
         f.altKategori = sub.slug;
         f.kategori = sub.category;
+      } else if (f.altKategori && f.altKategori !== sub.slug && f.kategori === sub.category) {
+        f.altKategori = undefined;
+        subConflict = true;
       }
     } else if (cat) {
       set(f, "kategori", cat.slug);
@@ -359,6 +571,35 @@ export function looksLikeModel(word: string): boolean {
   return /\d/.test(word);
 }
 
+/**
+ * Kalan kelimelerden model kodlarını toplar. Konuşma tanıyıcı kodu bölebilir:
+ * "3CX" → "3 CX", "PC210" → "PC 210". Rakamlı bir kelimeye BİTİŞİK 1–2 harflik
+ * parçalar aynı koda katılır; aksi hâlde "JCB 3 CX" yalnız "3" diye aranırdı.
+ */
+function modelGroups(leftIdx: number[], word: (i: number) => string): string[] {
+  const groups: string[][] = [];
+  let cur: { idx: number; words: string[]; hasDigit: boolean } | null = null;
+  const flush = () => {
+    if (cur?.hasDigit) groups.push(cur.words);
+    cur = null;
+  };
+  for (const i of leftIdx) {
+    const w = word(i);
+    const part = looksLikeModel(w) || /^\p{L}{1,2}$/u.test(w);
+    if (!part) {
+      flush();
+      continue;
+    }
+    if (cur && cur.idx !== i - 1) flush();
+    cur ??= { idx: i, words: [], hasDigit: false };
+    cur.idx = i;
+    cur.words.push(w);
+    cur.hasDigit ||= looksLikeModel(w);
+  }
+  flush();
+  return groups.map((g) => g.join(" "));
+}
+
 export function parseWithRules(text: string): RulesResult {
   const tokens = tokenize(text);
   const ctx: Ctx = {
@@ -370,22 +611,29 @@ export function parseWithRules(text: string): RulesResult {
   };
 
   phaseA(ctx);
-  phaseB(ctx);
+  const exact = phaseB(ctx);
   phaseC(ctx);
+  // Bulanık eşleme en son: kalıplar ve sözlük tüketemediği kelimelere bakar.
+  const fuzzy = phaseFuzzy(ctx);
+  resolve(ctx, [...exact, ...fuzzy].sort((a, b) => a.start - b.start));
   resolveMeasures(ctx);
 
-  const left = tokens.filter((t, i) => !ctx.used[i] && !isFiller(t.key));
-  const remainder = left.map((t) => t.raw);
+  const leftIdx = tokens.flatMap((t, i) => (!ctx.used[i] && !isFiller(t.key) ? [i] : []));
+  const remainder = leftIdx.map((i) => tokens[i].raw);
   // Sözle söylenen sayı rakamla aranır: ilanda "üç yüz yirmi" değil "320" yazar.
-  const searchable = left.map((t) => (t.num !== undefined ? t.key : t.raw));
-  const words = searchable.filter((w) => !looksLikeModel(w));
-  const models = searchable.filter(looksLikeModel);
+  const searchable = (i: number) => (tokens[i].num !== undefined ? tokens[i].key : tokens[i].raw);
+  const groups = modelGroups(leftIdx, (i) => searchable(i));
+  const words = leftIdx.map(searchable).filter((w) => !looksLikeModel(w));
 
-  if (searchable.length) {
-    // Model kodu varsa yalnız onu ara: "JCB 3CX" → marka=JCB, q=3CX. Kod yoksa
-    // kalan kelimeler bugünkü metin aramasıyla aynı şekilde q olur.
-    ctx.filters.q = (models.length ? models : searchable).join(" ");
+  if (groups.length === 1) {
+    // Model kodu varsa yalnız onu ara: "JCB 3CX" → marka=JCB, q=3CX.
+    ctx.filters.q = groups[0];
+  } else if (!groups.length && words.length) {
+    // Kod yoksa kalan kelimeler bugünkü metin aramasıyla aynı şekilde q olur.
+    ctx.filters.q = words.join(" ");
   }
+  // Birden çok ayrı kod ("3CX ve 4CX"): aramada "ya da" yok; ikisini birden
+  // aramak hiçbir ilanla eşleşmezdi. q boş kalır, marka/kategori filtresi yeter.
 
   const low = (ctx.recognized === 0 && words.length > 0) || words.length >= 2;
   return {

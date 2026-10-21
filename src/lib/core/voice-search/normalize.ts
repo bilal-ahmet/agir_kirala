@@ -110,9 +110,44 @@ export function tokenize(text: string): Token[] {
     .trim();
   if (!cleaned) return [];
 
-  const words = cleaned.split(/\s+/).map((raw) => ({ raw, key: wordKey(raw) }));
+  const words = cleaned.split(/\s+/).flatMap((raw) => splitNumberSuffix({ raw, key: wordKey(raw) }));
   return mergeNumbers(words);
 }
+
+/** Sayıdan ayrılan hâl ekleri. Kalıplar anlamı bunlardan okur ("5 binden ucuz"). */
+const NUMBER_SUFFIXES = ["den", "dan", "ten", "tan", "lik", "luk", "ye", "ya", "e", "a"];
+
+/**
+ * Ekli sayıyı sayı + ek olarak böler: "binden" → "bin" "den", "5000den" →
+ * "5000" "den". Aksi hâlde "5 binden ucuz" birleşmez, "5" serbest metne düşerdi.
+ *
+ * Yalnız çarpanlar (bin/yüz/milyon) ve rakamlar bölünür: "ikiye", "beşte" gibi
+ * biçimler fiyat kalıbında geçmez, "beste" gibi kelimeleri bozmak riskine değmez.
+ * Rakamda tek harfli ek bölünmez — "210a" bir model kodu olabilir.
+ */
+function splitNumberSuffix(w: { raw: string; key: string }): { raw: string; key: string }[] {
+  const digit = /^(\d+)([a-z]+)$/.exec(w.key);
+  if (digit && digit[2].length >= 2 && NUMBER_SUFFIXES.includes(digit[2])) {
+    return [
+      { raw: digit[1], key: digit[1] },
+      { raw: digit[2], key: digit[2] },
+    ];
+  }
+  if (w.key in MULTIPLIERS) return [w];
+  for (const s of NUMBER_SUFFIXES) {
+    const stem = w.key.slice(0, -s.length);
+    if (w.key.endsWith(s) && stem in MULTIPLIERS) {
+      return [
+        { raw: w.raw.slice(0, stem.length), key: stem },
+        { raw: w.raw.slice(stem.length), key: s },
+      ];
+    }
+  }
+  return [w];
+}
+
+/** "on tonluk", "on metre": birimden önce "on" sayıdır (ön/on karışması olmaz). */
+const UNIT_AFTER_ON = /^(?:ton|kilo|kg|kva|metre|mt|m|m3|kup|metrekup|beygir|hp|bg)/;
 
 function numericValue(key: string): { kind: "digit" | "ones" | "mult"; value: number } | null {
   if (/^\d+$/.test(key)) return { kind: "digit", value: Number(key) };
@@ -131,7 +166,9 @@ function mergeNumbers(words: { raw: string; key: string }[]): Token[] {
   let i = 0;
   while (i < words.length) {
     const first = numericValue(words[i].key);
-    if (!first) {
+    // Sayının hemen ardındaki "altı" ayrı bir 6 değil, "altında"dır (bkz. aşağıda).
+    const belowAfterNumber = words[i].key === "alti" && out.length > 0 && out[out.length - 1].num !== undefined;
+    if (!first || belowAfterNumber) {
       out.push(words[i]);
       i++;
       continue;
@@ -145,6 +182,19 @@ function mergeNumbers(words: { raw: string; key: string }[]): Token[] {
       if (!n) break;
       // İki rakam dizisi yan yana ("320 2020") ayrı sayılardır.
       if (n.kind === "digit" && j > i) break;
+      // Rakamın ardından yalnız çarpan gelir ("5 bin"). "5000 altı" 5006 değil,
+      // "5000'in altı"dır; konuşma tanıyıcı rakamla yazdığı sayıyı kelimeyle sürdürmez.
+      if (first.kind === "digit" && j > i && n.kind !== "mult") break;
+      // "beş bin altı" → yine "altında": ardından başka sayı gelmeyen "altı",
+      // yüzlük bir tutarın sonuna eklenmez (5006 TL'lik makine kiralanmaz).
+      if (
+        words[j].key === "alti" &&
+        j > i &&
+        total + current >= 100 &&
+        !(j + 1 < words.length && numericValue(words[j + 1].key))
+      ) {
+        break;
+      }
       if (n.kind === "mult") {
         if (n.value === 100) current = (current || 1) * 100;
         else {
@@ -159,7 +209,11 @@ function mergeNumbers(words: { raw: string; key: string }[]): Token[] {
 
     const span = words.slice(i, j);
     // "sıfır" de tek başına sayı değil: "sıfır ekskavatör" ilanın durumudur.
-    const lone = span.length === 1 && ["bir", "on", "sifir"].includes(span[0].key);
+    const unitNext = j < words.length && UNIT_AFTER_ON.test(words[j].key);
+    const lone =
+      span.length === 1 &&
+      ["bir", "on", "sifir"].includes(span[0].key) &&
+      !(span[0].key === "on" && unitNext);
     if (lone) {
       out.push(words[i]);
       i++;

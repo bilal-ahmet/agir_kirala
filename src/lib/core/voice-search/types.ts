@@ -26,6 +26,7 @@ export interface VoiceFilters {
   minFiyat?: number;
   maxFiyat?: number;
   minYil?: number;
+  maxYil?: number;
   sirala?: SortKey;
   /** Kategoriye özel sayısal eşikler: spec_<anahtar>=<değer> (minimum). */
   specs: Record<string, number>;

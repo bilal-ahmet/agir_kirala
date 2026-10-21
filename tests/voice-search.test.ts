@@ -10,7 +10,7 @@ import { parseFilters } from "@/lib/filter-params";
 import { merge, parseVoiceQuery, toParams } from "@/lib/core/voice-search";
 import { parseWithLlm } from "@/lib/core/voice-search/llm";
 import { tokenize } from "@/lib/core/voice-search/normalize";
-import { parseWithRules } from "@/lib/core/voice-search/rules";
+import { editDistance, parseWithRules } from "@/lib/core/voice-search/rules";
 import { emptyFilters } from "@/lib/core/voice-search/types";
 
 /** Kural motorunun ürettiği URL parametreleri. */
@@ -409,5 +409,202 @@ describe("tır", () => {
 
   it("'salı' günü açık kasa sayılmaz", () => {
     expect(params("salı günü kepçe")).not.toMatchObject({ kategori: "tir" });
+  });
+});
+
+// ───────── Saha denemesinden çıkan iyileştirmeler ─────────
+//
+// Her test, 90 gerçekçi cümlelik bir denemede yanlış sonuç veren bir kalıbı
+// sabitler. q ilan metninde aranır: sızan tek kelime sonucu sıfırlar, yanlış
+// filtre aramayı daraltır ya da ters çevirir.
+
+describe("olumsuzluk", () => {
+  it("iki seçenekli filtre tersine döner", () => {
+    expect(params("nakliye istemiyorum kepçe")).toMatchObject({ nakliye: "yok" });
+    expect(params("operatör istemiyorum vinç")).toMatchObject({ operator: "operatorsuz" });
+    expect(params("ikinci el olmasın forklift")).toMatchObject({ durum: "sifir" });
+    expect(params("ikinci el olanları istemiyorum forklift")).toMatchObject({ durum: "sifir" });
+    // Çift olumsuz: "operatörsüz olmasın" operatörlü istiyor demek.
+    expect(params("operatörsüz olmasın")).toEqual({ operator: "operatorlu" });
+    expect(params("nakliyesiz olmasın")).toEqual({ nakliye: "var" });
+  });
+
+  it("olumsuzlanan marka/konum hiç uygulanmaz (hariç tutma filtresi yok)", () => {
+    expect(params("JCB olmasın kepçe")).toEqual({ kategori: "hafriyat", altKategori: "beko-loder" });
+    expect(params("JCB markası olmasın kepçe")).toEqual({ kategori: "hafriyat", altKategori: "beko-loder" });
+    expect(params("İstanbul hariç vinç")).toEqual({ kategori: "vinc-platform" });
+    expect(params("Volvo dışında tır")).toEqual({ kategori: "tir" });
+  });
+
+  it("olumsuzluk sonraki filtreye taşmaz", () => {
+    expect(params("JCB olmasın Ankara'da kepçe")).toEqual({
+      il: "Ankara",
+      kategori: "hafriyat",
+      altKategori: "beko-loder",
+    });
+  });
+});
+
+describe("fiyat", () => {
+  it.each([
+    ["5 binden ucuz kepçe", { maxFiyat: "5000" }],
+    ["bütçem 10 bin kepçe", { maxFiyat: "10000" }],
+    ["20 binlik bütçem var", { maxFiyat: "20000" }],
+    ["en fazla 5000 kepçe", { maxFiyat: "5000" }],
+    ["5000 altı kepçe", { maxFiyat: "5000" }],
+    ["beş bin altı kepçe", { maxFiyat: "5000" }],
+    ["10 bine kadar forklift", { maxFiyat: "10000" }],
+    ["5 binden fazla vinç", { minFiyat: "5000" }],
+    ["10 bin ile 20 bin arası vinç", { minFiyat: "10000", maxFiyat: "20000" }],
+    ["ayda 50 bin lira vinç", { periyot: "aylik", maxFiyat: "50000" }],
+  ])("%s", (text, expected) => {
+    const p = params(text);
+    expect(p).toMatchObject(expected);
+    expect(p.q).toBeUndefined();
+  });
+
+  it("birimden önceki sayı fiyat sayılmaz", () => {
+    expect(params("en az 20 ton vinç")).toEqual({ kategori: "vinc-platform", spec_kaldirmaKapasitesi: "20" });
+    expect(params("en az 2015 model kepçe")).toMatchObject({ minYil: "2015" });
+    expect(params("en az 2015 model kepçe").minFiyat).toBeUndefined();
+  });
+
+  it("'beş bin altı yüz' yine 5600'dür", () => {
+    expect(params("beş bin altı yüz liraya kadar")).toEqual({ maxFiyat: "5600" });
+  });
+});
+
+describe("model yılı", () => {
+  it.each([
+    ["2018'den yeni kepçe", { minYil: "2018" }],
+    ["2015 öncesi kepçe", { maxYil: "2015" }],
+    ["2015 ile 2020 arası kepçe", { minYil: "2015", maxYil: "2020" }],
+  ])("%s", (text, expected) => {
+    const p = params(text);
+    expect(p).toMatchObject(expected);
+    expect(p.q).toBeUndefined();
+  });
+
+  it("son N yıl bu yıl dahil sayılır", () => {
+    const thisYear = new Date().getFullYear();
+    expect(params("son 5 yılın kepçesi")).toMatchObject({ minYil: String(thisYear - 4) });
+  });
+
+  it("yıl aralığı çip olarak iki uçla görünür", async () => {
+    const res = await parseVoiceQuery({ text: "2015 ile 2020 arası kepçe" }, { llm: false });
+    if (!res.ok) throw res.error;
+    expect(res.value.chips.map((c) => c.label)).toEqual(
+      expect.arrayContaining(["2015 ve sonrası", "2020 ve öncesi"]),
+    );
+  });
+});
+
+describe("ölçü", () => {
+  it("birimden önce 'on' sayıdır", () => {
+    expect(params("on tonluk vinç")).toEqual({ kategori: "vinc-platform", spec_kaldirmaKapasitesi: "10" });
+  });
+
+  it("tek başına 'platform' vinç/platformdur, tırın açık kasası değil", () => {
+    expect(params("platform kiralık")).toEqual({ kategori: "vinc-platform" });
+    expect(params("40 metrelik platform")).toEqual({ kategori: "vinc-platform", spec_calismaYuksekligi: "40" });
+    // Dorse ile söylenirse açık kasa tır yine bulunur.
+    expect(params("platform dorse")).toEqual({ kategori: "tir", altKategori: "acik-kasa" });
+  });
+});
+
+describe("konuşma tanıma yazım hataları", () => {
+  it.each([
+    ["forkilift", { kategori: "forklift" }],
+    ["jenaratör", { kategori: "jenerator" }],
+    ["jenaratörler", { kategori: "jenerator" }],
+    ["kompürsör", { kategori: "jenerator", altKategori: "kompresor" }],
+    ["manlif", { kategori: "vinc-platform" }],
+    ["telehendler", { kategori: "forklift", altKategori: "telehandler" }],
+    ["konteynir tır", { kategori: "tir", altKategori: "konteyner" }],
+    ["frigorifk tır", { kategori: "tir", altKategori: "frigorifik" }],
+    ["skania tır", { kategori: "tir", marka: "Scania" }],
+    ["hidromak", { marka: "Hidromek" }],
+  ])("%s", (text, expected) => {
+    expect(params(text)).toEqual(expected);
+  });
+
+  it("kısa ve gündelik kelimeler bulanık eşlenmez", () => {
+    // "geniş" ~ "Genie": 6 harften kısa adlar havuzda yok.
+    expect(params("geniş kasa tır")).toEqual({ kategori: "tir" });
+    expect(params("salı günü kepçe")).toEqual({ kategori: "hafriyat", altKategori: "beko-loder" });
+  });
+
+  it("düzenleme uzaklığı komşu harf yer değiştirmesini tek hata sayar", () => {
+    expect(editDistance("forklift", "forklfit")).toBe(1);
+    expect(editDistance("kompursor", "kompresor")).toBe(2);
+    expect(editDistance("vinc", "vinc")).toBe(0);
+  });
+});
+
+describe("sektör kelimeleri ilçe sanılmaz", () => {
+  it.each([
+    ["açık kasa tır", "Kaş"],
+    ["boru taşıma tır", "Bor"],
+    ["maden ocağı için kamyon", "Maden"],
+    ["bahçe düzenleme için mini kepçe", "Bahçe"],
+  ])("%s", (text, district) => {
+    expect(params(text).ilce).not.toBe(district);
+    expect(params(text).il).toBeUndefined();
+  });
+
+  it("il ile birlikte söylenirse ilçe olarak tanınır", () => {
+    expect(params("Niğde Bor forklift")).toMatchObject({ il: "Niğde", ilce: "Bor" });
+    expect(params("Antalya Kaş vinç")).toMatchObject({ il: "Antalya", ilce: "Kaş" });
+  });
+});
+
+describe("dolgu, operatör, eş anlamlılar", () => {
+  it.each([
+    "acaba Ankara'da kepçe var mı",
+    "yani şey Ankara'da kepçe lazım",
+    "abi Ankara'da bir kepçe bul",
+    "merhaba Ankara'da kepçe arıyorum",
+    "Ankara'da müsait olan kepçeler",
+    "Ankara'da boş olan kepçeler",
+    "rica etsem Ankara'da kepçe bakar mısın",
+    "ee hmm Ankara'da kepçe",
+    "Ankara'da kiralamak istediğim bir kepçe var",
+  ])("%s → yalnız il + kepçe", (text) => {
+    expect(params(text)).toEqual({ il: "Ankara", kategori: "hafriyat", altKategori: "beko-loder" });
+  });
+
+  it("şoförle / operatörle", () => {
+    expect(params("şoförüyle tır")).toEqual({ kategori: "tir", operator: "operatorlu" });
+    expect(params("şoför ile tır")).toEqual({ kategori: "tir", operator: "operatorlu" });
+    expect(params("operatörüyle birlikte vinç")).toEqual({ kategori: "vinc-platform", operator: "operatorlu" });
+  });
+
+  it("boyut ve tek kelimelik adlar", () => {
+    expect(params("küçük kepçe")).toEqual({ kategori: "hafriyat", altKategori: "bobcat" });
+    expect(params("küçük ekskavatör")).toEqual({ kategori: "hafriyat", altKategori: "paletli-mini-ekskavator" });
+    expect(params("büyük ekskavatör")).toEqual({ kategori: "hafriyat", altKategori: "paletli-ekskavator" });
+    expect(params("pompa")).toEqual({ kategori: "beton" });
+  });
+
+  it("İstanbul yakaları il olarak tanınır", () => {
+    expect(params("Avrupa yakası vinç")).toEqual({ il: "İstanbul", kategori: "vinc-platform" });
+    expect(params("Anadolu yakasında forklift")).toEqual({ il: "İstanbul", kategori: "forklift" });
+  });
+
+  it("aynı kategoriden iki alt tür → yalnız kategori", () => {
+    expect(params("kepçe veya ekskavatör Ankara")).toEqual({ kategori: "hafriyat", il: "Ankara" });
+    // Farklı kategoriler aynı anda aranamaz; ilk söylenen kalır.
+    expect(params("vinç ve forklift İzmir")).toEqual({ kategori: "vinc-platform", il: "İzmir" });
+  });
+});
+
+describe("model kodları", () => {
+  it("bölünmüş kod birleşik aranır", () => {
+    expect(params("JCB 3 CX")).toEqual({ marka: "JCB", q: "3 CX" });
+    expect(params("PC 210 komatsu")).toEqual({ marka: "Komatsu", q: "PC 210" });
+  });
+
+  it("birden çok ayrı kod q'ya girmez (aramada 'ya da' yok)", () => {
+    expect(params("JCB 3CX ve 4CX")).toEqual({ marka: "JCB" });
   });
 });

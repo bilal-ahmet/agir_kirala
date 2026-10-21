@@ -134,6 +134,7 @@ export function toParams(f: VoiceFilters): Record<string, string> {
   put("minFiyat", f.minFiyat);
   put("maxFiyat", f.maxFiyat);
   put("minYil", f.minYil);
+  put("maxYil", f.maxYil);
   if (f.sirala && f.sirala !== "onerilen") p.sirala = f.sirala;
   for (const [k, v] of Object.entries(f.specs)) put(`spec_${k}`, v);
   return p;
@@ -187,6 +188,7 @@ export function toChips(params: Record<string, string>): VoiceChip[] {
   if (params.minFiyat) add("minFiyat", params.minFiyat, `En az ${tl(params.minFiyat)}`);
   if (params.maxFiyat) add("maxFiyat", params.maxFiyat, `En fazla ${tl(params.maxFiyat)}`);
   if (params.minYil) add("minYil", params.minYil, `${params.minYil} ve sonrası`);
+  if (params.maxYil) add("maxYil", params.maxYil, `${params.maxYil} ve öncesi`);
   for (const [key, value] of Object.entries(params)) {
     if (!key.startsWith("spec_")) continue;
     const field = category?.specFields.find((s) => s.key === key.slice(5));

@@ -32,9 +32,9 @@ const SYNONYMS: Record<string, string[]> = {
   "hafriyat/beko-loder": ["kepce", "beko", "bekoloder", "beko loder", "kazici yukleyici"],
   "hafriyat/lastikli-yukleyici": ["loder", "loader", "lastikli loder", "yukleyici", "lastikli kepce"],
   "hafriyat/paletli-yukleyici": ["paletli loder", "paletli kepce"],
-  "hafriyat/bobcat": ["bobcat", "bobket", "mini yukleyici", "mini loder", "mini kepce", "yavru kepce"],
+  "hafriyat/bobcat": ["bobcat", "bobket", "mini yukleyici", "mini loder", "mini kepce", "yavru kepce", "kucuk kepce"],
   "hafriyat/paletli-ekskavator": ["ekskavator", "paletli ekskavator", "paletli kazici", "kazici"],
-  "hafriyat/paletli-mini-ekskavator": ["mini ekskavator", "mini kazici", "mini paletli"],
+  "hafriyat/paletli-mini-ekskavator": ["mini ekskavator", "mini kazici", "mini paletli", "kucuk ekskavator", "kucuk kazici"],
   "hafriyat/lastikli-ekskavator": ["lastikli ekskavator", "lastikli kazici"],
 
   "damperli-kamyon": ["kamyon", "damperli", "damperli kamyon", "damper", "hafriyat kamyonu"],
@@ -57,7 +57,8 @@ const SYNONYMS: Record<string, string[]> = {
   "tir/konteyner": ["konteyner", "konteyner tasiyici", "konteyner sasi", "sasi dorse"],
   "tir/oto-tasiyici": ["oto tasiyici", "arac tasiyici", "oto tasima", "arac tasima"],
 
-  beton: ["beton", "beton makine", "beton pompasi", "beton pompa"],
+  // Tek başına "pompa" bu sitede beton pompasıdır; alt türü (kamyon üstü/sabit) belirsiz.
+  beton: ["beton", "beton makine", "beton pompasi", "beton pompa", "pompa"],
   "beton/beton-mikseri": ["mikser", "beton mikseri", "transmikser", "betoniyer"],
   "beton/kamyon-ustu-pompa": ["kamyon ustu pompa"],
   "beton/sabit-pompa": ["sabit pompa"],
@@ -128,8 +129,9 @@ const BRAND_ALIASES: Record<string, string[]> = {
  */
 const COMMON_WORD_DISTRICTS = new Set(
   ["merkez", "kale", "cay", "orta", "pazar", "guney", "bala", "hamur", "ulus", "evren", "kemer", "sur", "yenice", "bozkurt", "aksu", "kiraz", "uzum", "elma", "yaprakli", "ova",
-    // Kastamonu/Araç: bu sitede "araç" hemen hep taşıt demek ("araç getir").
-    "arac"].map(phraseKey),
+    // Sektör kelimeleri ek atılınca ilçeye iniyor: "araç" (Kastamonu/Araç),
+    // "kasa" → Kaş, "boru" → Bor, "maden", "bahçe". "Açık kasa tır" Antalya'ya gidiyordu.
+    "arac", "kas", "bor", "maden", "bahce"].map(phraseKey),
 );
 
 export interface Lexicon {
@@ -176,9 +178,19 @@ function build(): Lexicon {
   add("Antep", { kind: "il", value: "Gaziantep" });
   add("Urfa", { kind: "il", value: "Şanlıurfa" });
 
+  // İstanbul'un yakaları ilçe filtresine sığmaz (onlarca ilçe), il yeter.
+  add("Avrupa Yakası", { kind: "il", value: "İstanbul" });
+  add("Anadolu Yakası", { kind: "il", value: "İstanbul" });
+
   // ── Kategori / alt kategori (taksonomi adlarından) ──
   const categoryName = new Map<string, string>();
   const subcategoryName = new Map<string, string>();
+  // Alt kategori adının PARÇALARINDAN türetilen anahtarlar ("Sal (Platform) Tır" → "platform").
+  const derived = new Set<string>();
+  const addPart = (phrase: string, entry: LexEntry) => {
+    derived.add(phraseKey(phrase));
+    add(phrase, entry);
+  };
   for (const c of CATEGORIES) {
     categoryName.set(c.slug, c.name);
     add(c.name, { kind: "kategori", slug: c.slug });
@@ -188,9 +200,9 @@ function build(): Lexicon {
       // "Beko Loder (Kazıcı Yükleyici)" → "Beko Loder (Kazıcı Yükleyici)", "Beko Loder", "Kazıcı Yükleyici"
       add(s.name, entry);
       const outer = s.name.replace(/\([^)]*\)/g, " ").trim();
-      if (outer) add(outer, entry);
-      for (const m of s.name.matchAll(/\(([^)]*)\)/g)) add(m[1], entry);
-      for (const part of outer.split("/")) if (part.trim() !== outer) add(part, entry);
+      if (outer) addPart(outer, entry);
+      for (const m of s.name.matchAll(/\(([^)]*)\)/g)) addPart(m[1], entry);
+      for (const part of outer.split("/")) if (part.trim() !== outer) addPart(part, entry);
     }
   }
   for (const [target, phrases] of Object.entries(SYNONYMS)) {
@@ -200,7 +212,16 @@ function build(): Lexicon {
     const entry: LexEntry = sub
       ? { kind: "altKategori", category: cat, slug: sub }
       : { kind: "kategori", slug: cat };
-    for (const p of phrases) add(p, entry);
+    for (const p of phrases) {
+      // Elle yazılan eş anlamlı, ad parçasından otomatik türeyen anlamı ezer.
+      // Yoksa "platform" (Vinçler ve Platformlar) "Açık Kasa / Sal (Platform)
+      // Tır" adından türeyen anlama yeniliyordu: alt kategori her zaman kazanır.
+      const key = phraseKey(p);
+      if (derived.delete(key)) {
+        entries.set(key, (entries.get(key) ?? []).filter((e) => e.kind !== "kategori" && e.kind !== "altKategori"));
+      }
+      add(p, entry);
+    }
   }
 
   // ── Marka ──
