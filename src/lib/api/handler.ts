@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AppError, collectFieldErrors, httpStatus, pgCode, type MutationResult } from "../core/errors";
 import { getCurrentUser, getSessionContext } from "../auth/session";
-import { sendNotifications } from "../notify/fcm";
+import { deliverNotifications } from "../notify/deliver";
 import type { User } from "../types";
 
 /**
@@ -165,8 +165,8 @@ export async function parseJson<S extends z.ZodType>(
 export function unwrap<T>(result: MutationResult<T>): T {
   if (!result.ok) throw result.error;
   for (const path of result.revalidate) revalidatePath(path);
-  // after(): yanıt döndükten sonra gönderilir; istemci FCM'i beklemez ve
+  // after(): yanıt döndükten sonra gönderilir (push + e-posta); istemci beklemez ve
   // Vercel'de lambda donmadan önce işin bitmesi garanti altına alınır.
-  if (result.notify.length) after(() => sendNotifications(result.notify));
+  if (result.notify.length) after(() => deliverNotifications(result.notify));
   return result.value;
 }

@@ -29,6 +29,8 @@ import * as coreSessions from "@/lib/core/sessions";
 import { sendNotifications } from "@/lib/notify/fcm";
 import { notificationData } from "@/lib/notify/types";
 import { listingsExist } from "@/lib/db/queries/listings";
+import { tryRateLimit } from "@/lib/api/rate-limit";
+import { sendNotificationEmails } from "@/lib/notify/email";
 import { parseFilters } from "@/lib/filter-params";
 
 // ───────── Yardımcılar ─────────
@@ -747,5 +749,97 @@ describe("arama metni", () => {
   it("% ve _ joker değil harf olarak aranır", async () => {
     expect(await exists(`${tag} %`)).toBe(false);
     expect(await exists(`${tag} _`)).toBe(false);
+  });
+});
+
+// ───────── E-posta bildirimleri ─────────
+//
+// Push ile aynı bildirim nesnesinden gönderilir. Mesaj e-postası alıcı +
+// sohbet başına 5 dakikada bire sınırlı; diğerleri sınırsız.
+
+describe("e-posta bildirimleri", () => {
+  const sent: { to: string; subject: string }[] = [];
+  const deps = {
+    send: async (m: { to: string; subject: string }) => {
+      sent.push({ to: m.to, subject: m.subject });
+    },
+    // Gerçek sınır (rate_limits tablosu) — üretimdeki ile aynı anahtar.
+    allowMessage: (userId: string, conversationId: string) =>
+      tryRateLimit("mailMsg", `${userId}:${conversationId}`),
+  };
+
+  afterEach(() => {
+    sent.length = 0;
+  });
+
+  it("alıcının kayıtlı adresine gider", async () => {
+    const recipient = await makeUser();
+    const row = await db.query.users.findFirst({ where: eq(users.id, recipient.id) });
+    await sendNotificationEmails(
+      [{ userId: recipient.id, title: "Talebiniz onaylandı", body: "Kepçe", data: notificationData("request_approved", "r1") }],
+      deps,
+    );
+    expect(sent).toEqual([{ to: row!.email, subject: "Kiralama talebiniz onaylandı — AĞIRKİRALA" }]);
+  });
+
+  it("aynı sohbetteki ikinci mesaj 5 dakika içinde e-posta üretmez, başka sohbet üretir", async () => {
+    const recipient = await makeUser();
+    const msg = (conv: string) => ({
+      userId: recipient.id,
+      title: "Mehmet",
+      body: "Merhaba",
+      data: notificationData("message", conv),
+    });
+    const convA = randomUUID();
+    const convB = randomUUID();
+
+    await sendNotificationEmails([msg(convA)], deps);
+    await sendNotificationEmails([msg(convA)], deps);
+    expect(sent).toHaveLength(1);
+
+    await sendNotificationEmails([msg(convB)], deps);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("talep e-postaları sınırlanmaz", async () => {
+    const recipient = await makeUser();
+    const n = { userId: recipient.id, title: "Yeni kiralama talebi", body: "x", data: notificationData("request_created", "r") };
+    await sendNotificationEmails([n], deps);
+    await sendNotificationEmails([n], deps);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("silinmiş hesaba e-posta gitmez", async () => {
+    const recipient = await makeUser();
+    expect((await coreAccount.anonymizeAccount(recipient.id)).ok).toBe(true);
+    await sendNotificationEmails(
+      [{ userId: recipient.id, title: "x", body: "y", data: notificationData("request_created", "r") }],
+      deps,
+    );
+    expect(sent).toEqual([]);
+  });
+
+  it("gönderim hatası yutulur, diğer alıcılar etkilenmez", async () => {
+    const a = await makeUser();
+    const b = await makeUser();
+    const aEmail = (await db.query.users.findFirst({ where: eq(users.id, a.id) }))!.email;
+    const bEmail = (await db.query.users.findFirst({ where: eq(users.id, b.id) }))!.email;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failing = {
+      ...deps,
+      send: async (m: { to: string; subject: string }) => {
+        if (m.to === aEmail) throw new Error("resend down");
+        sent.push({ to: m.to, subject: m.subject });
+      },
+    };
+    await expect(
+      sendNotificationEmails(
+        [a, b].map((u) => ({ userId: u.id, title: "t", body: "b", data: notificationData("request_created", "r") })),
+        failing,
+      ),
+    ).resolves.toBeUndefined();
+    expect(sent.map((s) => s.to)).toEqual([bEmail]);
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
   });
 });

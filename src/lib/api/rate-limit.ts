@@ -30,6 +30,12 @@ export const LIMITS = {
   forgot: { max: 3, windowMs: 60 * 60_000 },
   /** Sesli aramada LLM yedeği — her çağrı API maliyeti. Kural yolu sınırsız. */
   voice: { max: 20, windowMs: 60_000 },
+  /**
+   * Mesaj e-postası: alıcı + sohbet başına 5 dakikada bir. Canlı bir
+   * yazışmada her mesaj için e-posta gelen kutusunu doldururdu; push ise her
+   * mesajda gider (bkz. notify/email.ts).
+   */
+  mailMsg: { max: 1, windowMs: 5 * 60_000 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -49,6 +55,13 @@ export function clientIp(req: NextRequest): string {
  * kalıcı olarak kilitlenirdi.
  */
 export async function enforceRateLimit(name: LimitName, subject: string): Promise<void> {
+  if (!(await tryRateLimit(name, subject))) {
+    throw new AppError("rate_limited", "Çok fazla deneme yaptınız. Lütfen biraz sonra tekrar deneyin.");
+  }
+}
+
+/** enforceRateLimit'in fırlatmayan biçimi: sınır içindeyse true (sayaç yine artar). */
+export async function tryRateLimit(name: LimitName, subject: string): Promise<boolean> {
   const { max, windowMs } = LIMITS[name];
   const key = `${name}:${subject}`;
   const interval = sql.raw(`interval '${Math.round(windowMs / 1000)} seconds'`);
@@ -68,7 +81,5 @@ export async function enforceRateLimit(name: LimitName, subject: string): Promis
     .where(lt(rateLimits.resetAt, new Date()))
     .catch(() => {});
 
-  if ((rows[0]?.count ?? 0) > max) {
-    throw new AppError("rate_limited", "Çok fazla deneme yaptınız. Lütfen biraz sonra tekrar deneyin.");
-  }
+  return (rows[0]?.count ?? 0) <= max;
 }

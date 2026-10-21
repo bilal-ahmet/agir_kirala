@@ -22,20 +22,38 @@ function fromAddress(): string {
   return from;
 }
 
-/** HTML gövdesine kullanıcı verisi girmiyor ama yine de kaçış uygulanır. */
-function escapeHtml(s: string): string {
+/** RESEND_API_KEY ve EMAIL_FROM tanımlı mı — yoksa (yerel/CI) bildirim e-postası atlanır. */
+export function emailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+}
+
+/** HTML gövdesine giren her değer kaçışlanır — bildirim e-postalarında kullanıcı metni var. */
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export interface EmailMessage {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+/** Tek e-posta gönderir; Resend reddederse fırlatır. */
+export async function sendEmail(msg: EmailMessage): Promise<void> {
+  const { error } = await getResend().emails.send({ from: fromAddress(), ...msg });
+  if (error) throw new Error(error.message);
 }
 
 /** Şifre sıfırlama bağlantısını e-postayla gönderir. */
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
   const url = escapeHtml(resetUrl);
-  const { error } = await getResend().emails.send({
-    from: fromAddress(),
+  await sendEmail({
     to,
     subject: "Şifre sıfırlama — AĞIRKİRALA",
     text: [
@@ -71,6 +89,4 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
       </div>
     `,
   });
-
-  if (error) throw new Error(error.message);
 }

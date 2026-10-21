@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import type { MutationResult } from "../core/errors";
 import type { Notification } from "../notify/types";
-import { sendNotifications } from "../notify/fcm";
+import { deliverNotifications } from "../notify/deliver";
 
 /**
  * Core mutasyon sonucunu taşıma katmanına bağlar.
@@ -19,18 +19,18 @@ export function applyRevalidation(paths: string[]): void {
 }
 
 /**
- * Push bildirimlerini YANIT GÖNDERİLDİKTEN SONRA yollar.
+ * Bildirimleri (push + e-posta) YANIT GÖNDERİLDİKTEN SONRA yollar.
  *
  * `after()` şart: Vercel'de yanıt döndükten sonra başlatılan "ateşle-unut" bir
  * iş, lambda dondurulduğu için hiç tamamlanmayabilir. Beklemek de yanlış olurdu —
- * mesaj zaten kaydedildi, kullanıcı FCM'in yavaşlığını beklememeli.
+ * mesaj zaten kaydedildi, kullanıcı FCM'in ve e-postanın yavaşlığını beklememeli.
  *
- * Gönderim hataları yutulur (fcm.ts içinde loglanır): bildirim
+ * Gönderim hataları yutulur (fcm.ts / email.ts içinde loglanır): bildirim
  * gidemedi diye mesaj gönderimi başarısız sayılmaz.
  */
 export function dispatchNotifications(notifications: Notification[]): void {
   if (!notifications.length) return;
-  after(() => sendNotifications(notifications));
+  after(() => deliverNotifications(notifications));
 }
 
 /** Core sonucunu tek çağrıda uygular: cache tazeleme + bildirim. */

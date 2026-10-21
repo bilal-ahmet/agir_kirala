@@ -276,6 +276,14 @@ Tanımlı değilse bildirim sessizce atlanır; geliştirme ve testler etkilenmez
 Bildirim **hiçbir zaman eylemi yapana gitmez.** `data` içindeki her değer
 STRING'dir (FCM `data` sözleşmesi).
 
+**E-posta:** Aynı olaylar alıcıya Resend ile e-posta olarak da gider (web
+kullanıcılarının push karşılığı; `src/lib/notify/email.ts`). Bağlantılar web
+sayfalarına açılır (`webPathFor`: `/hesap/mesajlar?c=…`, `/hesap/gelen-talepler`,
+`/hesap/taleplerim`, `/ilanlar/{id}`). Mesaj e-postası alıcı + sohbet başına
+**5 dakikada bir** gider (canlı yazışma gelen kutusunu doldurmasın); push her
+mesajda gider. Silinmiş hesaba e-posta gitmez. Push ve e-posta aynı `after()`
+içinde paralel gönderilir (`notify/deliver.ts`); biri hata verirse diğeri etkilenmez.
+
 ### Derin bağlantı: `data.route`
 
 `data.route` uygulama içi GÖRELİ yoldur; mutlak URL gönderilmez. URL, payload'ı

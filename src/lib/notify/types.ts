@@ -64,6 +64,27 @@ export function routeFor(kind: NotificationKind, id: string, listingId?: string)
 }
 
 /**
+ * Bildirim türü → WEB sitesindeki yol (e-posta bağlantıları için).
+ *
+ * Mobilin router'ı (routeFor) ile web sayfaları farklı: web'de hesap sayfaları
+ * /hesap altında, sohbet ayrı sayfa değil listede `?c=` ile seçiliyor.
+ */
+export function webPathFor(data: NotificationData): string {
+  switch (data.type) {
+    case "message":
+      return `/hesap/mesajlar?c=${encodeURIComponent(data.id)}`;
+    case "request_created":
+    case "request_cancelled":
+      return "/hesap/gelen-talepler";
+    case "request_approved":
+    case "request_rejected":
+      return "/hesap/taleplerim";
+    case "review_created":
+      return data.listingId ? `/ilanlar/${encodeURIComponent(data.listingId)}` : "/";
+  }
+}
+
+/**
  * Bildirim verisini kurar — `route` otomatik türetilir.
  *
  * Çağrı yerlerinin `route`'u elle yazmasına izin verilmez: unutulan tek bir yer
