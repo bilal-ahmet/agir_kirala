@@ -272,6 +272,20 @@ export const getListingById = cache(async (id: string): Promise<Listing | undefi
 export const findAnyListing = getListingById;
 
 /** Bir kategorideki aktif ilan sayısı (kategori grid sayaçları). */
+/**
+ * Filtrelere uyan en az bir aktif ilan var mı — sayım yapmadan, tek satır.
+ * Sesli aramanın güvenlik ağı kullanır (bkz. core/voice-search → hasResults).
+ */
+export async function listingsExist(f: FilterState): Promise<boolean> {
+  const rows = await db
+    .select({ id: listings.id })
+    .from(listings)
+    .innerJoin(users, eq(listings.ownerId, users.id))
+    .where(and(...buildConditions(f)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function countByCategory(categorySlug: string): Promise<number> {
   const [{ total }] = await db
     .select({ total: sql<number>`count(*)::int` })

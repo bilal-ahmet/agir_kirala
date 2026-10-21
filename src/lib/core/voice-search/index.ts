@@ -42,6 +42,14 @@ export interface VoiceParseOptions {
   llm?: boolean;
   /** Test için LLM bağımlılığı. */
   llmDeps?: Parameters<typeof parseWithLlm>[2];
+  /**
+   * Güvenlik ağı: bu parametrelerle en az bir ilan var mı. Verilirse ve
+   * tanınan filtrelerin yanında kod olmayan bir q kaldıysa sorulur; q yüzünden
+   * sonuç sıfırsa q atılır. Dolgu listesi hiçbir zaman tam olamaz ("abi",
+   * "müsait" …); sızan tek kelime boş sonuç ekranı demekti. Bedeli yalnız bu
+   * durumda bir DB round-trip'i. Hata verirse q olduğu gibi kalır.
+   */
+  hasResults?: (params: Record<string, string>) => Promise<boolean>;
 }
 
 export async function parseVoiceQuery(
@@ -76,6 +84,17 @@ export async function parseVoiceQuery(
   }
 
   const params = sanitize(toParams(filters));
+  // Model kodu kasıtlıdır: "JCB 3CX" bulunamıyorsa kullanıcı bunu görmeli,
+  // yerine tüm JCB'ler gösterilmemeli. Yalnız serbest kelimeler denetlenir.
+  const freeText = params.q !== undefined && !params.q.split(" ").some(looksLikeModel);
+  if (options.hasResults && freeText && Object.keys(params).length > 1) {
+    try {
+      if (!(await options.hasResults(params))) delete params.q;
+    } catch (e) {
+      console.warn("[voice-search] sonuç denetimi yapılamadı:", e instanceof Error ? e.message : e);
+    }
+  }
+
   return ok({
     text,
     params,

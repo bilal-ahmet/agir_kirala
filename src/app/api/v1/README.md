@@ -122,7 +122,12 @@ Anlaşılmayan cümle hata değildir: `params` boş döner, istemci "anlayamadı
 gösterir. 400 yalnız boş ya da 200 karakterden uzun metinde döner.
 
 **Çözümleme:** önce sözlük (il, ilçe, kategori, marka, eş anlamlılar; bedava,
-~1 ms). Anlaşılmayan anlamlı kelime kalırsa ve `ANTHROPIC_API_KEY` tanımlıysa
+~1 ms). Kural motoru olumsuzluğu ("JCB olmasın", "nakliye istemiyorum"), fiyat
+ve yıl aralıklarını ("10 bin ile 20 bin arası", "2015 öncesi" → `maxYil`),
+komut/dolgu kelimelerini ve konuşma tanıma yazım hatalarını ("forkilift",
+"jenaratör") tanır. Filtrelerin yanında model kodu olmayan bir `q` kalırsa
+sunucu tek satırlık bir sorguyla o `q`'nun sonuç verip vermediğine bakar;
+vermiyorsa `q` atılır (sızan tek kelime boş sonuç ekranı demekti). Anlaşılmayan anlamlı kelime kalırsa ve `ANTHROPIC_API_KEY` tanımlıysa
 Claude Haiku yedeği denenir (`source: "llm"`). LLM'in çıktısı taksonomiden
 üretilen enum'larla kilitlidir; hata/zaman aşımında sessizce sözlük sonucuna
 düşülür. Hız sınırı (`voice`, IP başına 20/dk) yalnız LLM yoluna uygulanır.

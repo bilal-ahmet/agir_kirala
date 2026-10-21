@@ -608,3 +608,44 @@ describe("model kodları", () => {
     expect(params("JCB 3CX ve 4CX")).toEqual({ marka: "JCB" });
   });
 });
+
+describe("güvenlik ağı: q sonucu sıfırlıyorsa atılır", () => {
+  it("serbest kelime sonuç vermiyorsa düşer, filtreler kalır", async () => {
+    let asked: Record<string, string> | undefined;
+    const hasResults = async (p: Record<string, string>) => {
+      asked = { ...p };
+      return false;
+    };
+    const res = await parseVoiceQuery({ text: "İstanbul hidrolik kırıcı" }, { llm: false, hasResults });
+    if (!res.ok) throw res.error;
+    expect(asked).toEqual({ il: "İstanbul", q: "hidrolik kırıcı" });
+    expect(res.value.params).toEqual({ il: "İstanbul" });
+    expect(res.value.chips.map((c) => c.param)).toEqual(["il"]);
+  });
+
+  it("sonuç varsa q kalır", async () => {
+    const res = await parseVoiceQuery(
+      { text: "İstanbul hidrolik kırıcı" },
+      { llm: false, hasResults: async () => true },
+    );
+    if (!res.ok) throw res.error;
+    expect(res.value.params.q).toBe("hidrolik kırıcı");
+  });
+
+  it("model kodu, tek başına q ve denetim hatası denetlenmez / q'yu silmez", async () => {
+    const never = vi.fn(async () => false);
+    const code = await parseVoiceQuery({ text: "JCB 3CX" }, { llm: false, hasResults: never });
+    const alone = await parseVoiceQuery({ text: "hidrolik kırıcı" }, { llm: false, hasResults: never });
+    expect(never).not.toHaveBeenCalled();
+    expect(code.ok && code.value.params.q).toBe("3CX");
+    expect(alone.ok && alone.value.params.q).toBe("hidrolik kırıcı");
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failed = await parseVoiceQuery(
+      { text: "İstanbul hidrolik kırıcı" },
+      { llm: false, hasResults: async () => Promise.reject(new Error("db")) },
+    );
+    expect(failed.ok && failed.value.params.q).toBe("hidrolik kırıcı");
+    warn.mockRestore();
+  });
+});
