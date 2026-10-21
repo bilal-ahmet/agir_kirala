@@ -55,7 +55,7 @@ export interface Badges {
 }
 
 /**
- * Rozet sayaçları — mobil bunları polling'ler (push gönderimi henüz yok).
+ * Rozet sayaçları — mobil uygulama açılışında ve push gelince tazeler.
  * İki sayı tek round-trip'te: mobilde her ekstra gidiş-dönüş pahalı.
  *
  * "Okunmamış": karşı taraftan gelen ve benim son okuma damgamdan sonra yazılmış

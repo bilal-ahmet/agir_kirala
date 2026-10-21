@@ -47,6 +47,7 @@ export const contactPreferenceEnum = pgEnum("contact_preference", [
 ]);
 /** Oturumun hangi istemciden açıldığı — web cookie (24s) vs mobil bearer (60g kayan). */
 export const sessionClientEnum = pgEnum("session_client", ["web", "mobile"]);
+export const devicePlatformEnum = pgEnum("device_platform", ["ios", "android"]);
 
 // ───────── users ─────────
 export const users = pgTable(
@@ -308,6 +309,28 @@ export const sessions = pgTable(
   ],
 );
 
+// ───────── device_tokens (FCM push) ─────────
+// Token kullanıcıya değil OTURUMA bağlı: çıkış, uzaktan oturum kapatma, şifre
+// değişimi ve hesap silme oturumu siler → cascade token'ı da siler. İstemci
+// çıkışta DELETE çağırmayı unutsa bile o cihaza başkasının bildirimi gitmez.
+// Alıcı kullanıcı sessions.user_id üzerinden bulunur; ayrı user_id kolonu
+// tutulmaz (iki kaynak birbirinden kayabilirdi).
+export const deviceTokens = pgTable(
+  "device_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    // Aynı cihaz token'ı başka bir hesaba geçebilir → unique + upsert ile sahip değişir.
+    token: text("token").notNull(),
+    platform: devicePlatformEnum("platform").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("device_tokens_token_unique").on(t.token), index("device_tokens_session_idx").on(t.sessionId)],
+);
+
 // ───────── rate_limits ─────────
 // Vercel serverless'te süreç-içi sayaç işe yaramaz (her istek ayrı lambda olabilir),
 // bu yüzden sabit pencereli sayaç DB'de tutulur.
@@ -414,8 +437,13 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   }),
 }));
 
-export const sessionsRelations = relations(sessions, ({ one }) => ({
+export const sessionsRelations = relations(sessions, ({ one, many }) => ({
   user: one(users, { fields: [sessions.userId], references: [users.id] }),
+  deviceTokens: many(deviceTokens),
+}));
+
+export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
+  session: one(sessions, { fields: [deviceTokens.sessionId], references: [sessions.id] }),
 }));
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
@@ -433,3 +461,4 @@ export type MessageRow = typeof messages.$inferSelect;
 export type ReviewRow = typeof reviews.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type PasswordResetTokenRow = typeof passwordResetTokens.$inferSelect;
+export type DeviceTokenRow = typeof deviceTokens.$inferSelect;

@@ -15,6 +15,8 @@ import {
   createListingSchema,
   createRentalRequestSchema,
   createReviewSchema,
+  deviceTokenDeleteSchema,
+  deviceTokenSchema,
   forgotSchema,
   listingStatusBodySchema,
   loginBodySchema,
@@ -455,7 +457,7 @@ const ENDPOINTS: Endpoint[] = [
   { method: "delete", path: "/me", id: "deleteAccount", summary: "Hesap silme = anonimleştirme. Yorum/mesaj/talep geçmişi korunur.", auth: true, status: 204 },
   { method: "get", path: "/me/sessions", id: "listSessions", summary: "Aktif oturumlar (cihazlarım).", auth: true, response: listOf(ref("Session")) },
   { method: "delete", path: "/me/sessions/{id}", id: "revokeSession", summary: "Uzaktan oturum kapatma.", auth: true, params: ["id"], status: 204 },
-  { method: "get", path: "/me/badges", id: "getBadges", summary: "Bekleyen talep + okunmamış sohbet sayısı (push yerine polling).", auth: true, response: ref("Badges") },
+  { method: "get", path: "/me/badges", id: "getBadges", summary: "Bekleyen talep + okunmamış sohbet sayısı.", auth: true, response: ref("Badges") },
 
   { method: "post", path: "/search/parse", id: "parseVoiceSearch", summary: "Sesli arama: cihazda metne çevrilmiş cümleyi arama filtrelerine çevirir (ör. \"İstanbul'da operatörlü JCB kepçe\"). Dönen params olduğu gibi GET /listings sorgusuna eklenir.", auth: false, request: voiceQuerySchema, response: ref("VoiceSearchResult"), responseNote: "Anlaşılmayan cümle hata değildir: params boş döner." },
   { method: "get", path: "/listings", id: "searchListings", summary: "İlan arama. Filtre parametreleri web ile aynı (q, kategori, marka, il, sayfa, spec_*).", auth: false, query: true, response: ref("ListingPage"), responseNote: "12 ilan/sayfa." },
@@ -489,6 +491,9 @@ const ENDPOINTS: Endpoint[] = [
   { method: "get", path: "/users/{id}", id: "getPublicUser", summary: "Halka açık satıcı profili (e-posta sızdırılmaz).", auth: false, params: ["id"], response: obj({ user: ref("User"), listings: arrayOf(ref("Listing")) }, ["user", "listings"]) },
   { method: "get", path: "/users/{id}/reviews", id: "getUserReviews", summary: "Satıcıya yapılan yorumlar.", auth: false, params: ["id"], response: listOf(ref("Review")) },
   { method: "post", path: "/reviews", id: "createReview", summary: "Onaylanmış kiralamaya yorum.", auth: true, request: createReviewSchema, response: ref("CreatedId"), status: 201 },
+
+  { method: "post", path: "/device-tokens", id: "registerDeviceToken", summary: "FCM cihaz token'ı kaydet (girişte ve onTokenRefresh'te). Token oturuma bağlanır; çıkışta kendiliğinden silinir.", auth: true, request: deviceTokenSchema, status: 204 },
+  { method: "delete", path: "/device-tokens", id: "deleteDeviceToken", summary: "FCM cihaz token'ını sil (bildirimleri kapat).", auth: true, request: deviceTokenDeleteSchema, status: 204 },
 
 ];
 

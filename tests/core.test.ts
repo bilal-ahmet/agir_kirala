@@ -7,12 +7,12 @@
  * uçları da aynı core'u çağırdığı için onların da regresyon ağıdır.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { createVerify, generateKeyPairSync, randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { listings, rentalRequests, sessions, users } from "@/lib/db/schema";
+import { deviceTokens, listings, rentalRequests, sessions, users } from "@/lib/db/schema";
 import { toUser } from "@/lib/db/queries/mappers";
 import { hashPassword } from "@/lib/auth/password";
 import { hashToken } from "@/lib/auth/token";
@@ -24,6 +24,10 @@ import * as coreConversations from "@/lib/core/conversations";
 import * as coreFavorites from "@/lib/core/favorites";
 import * as coreAccount from "@/lib/core/account";
 import * as coreAuth from "@/lib/core/auth";
+import * as coreDevices from "@/lib/core/devices";
+import * as coreSessions from "@/lib/core/sessions";
+import { sendNotifications } from "@/lib/notify/fcm";
+import { notificationData } from "@/lib/notify/types";
 
 // ───────── Yardımcılar ─────────
 
@@ -402,7 +406,7 @@ describe("hesap", () => {
 
 // ───────── Push bildirimleri ─────────
 //
-// Gonderim OneSignal'e ait; burada test edilen sey iş mantiginin urettigi
+// Gonderim tasima katmaninda (after() icinde); burada test edilen sey iş mantiginin urettigi
 // BILDIRIM NIYETI: dogru kisiye gidiyor mu, kendine gitmiyor mu, derin baglanti
 // verisi dolu mu. Yanlis aliciya bildirim, sessiz ve utanc verici bir hatadir.
 
@@ -490,7 +494,7 @@ describe("bildirimler", () => {
     expect(notifs(cancelled)[0].data.route).toBe("/gelen-talepler");
   });
 
-  it("bildirim verisindeki tum degerler string (OneSignal data sozlesmesi)", async () => {
+  it("bildirim verisindeki tum degerler string (FCM data sozlesmesi)", async () => {
     const { id: listingId } = value<{ id: string }>(
       await coreListings.createListing(owner, listingInput()),
     );
@@ -532,5 +536,177 @@ describe("bildirimler", () => {
     );
     expect(notifs(await coreFavorites.toggleFavorite(renter, id))).toEqual([]);
     expect(notifs(await coreListings.updateListingStatus(owner, id, "pasif"))).toEqual([]);
+  });
+});
+
+// ───────── Push cihaz token'lari (FCM) ─────────
+
+async function makeSession(user: User, expiresInMs = 86_400_000): Promise<string> {
+  const [row] = await db
+    .insert(sessions)
+    .values({
+      userId: user.id,
+      tokenHash: hashToken(randomUUID()),
+      client: "mobile",
+      expiresAt: new Date(Date.now() + expiresInMs),
+    })
+    .returning({ id: sessions.id });
+  return row.id;
+}
+
+/** Gercek FCM token'i ~150+ karakter; min(20) dogrulamasini gecen benzersiz deger. */
+function fcmToken(tag: string): string {
+  return `${tag}-${randomUUID()}-${randomUUID()}`;
+}
+
+async function tokenRow(token: string) {
+  return db.query.deviceTokens.findFirst({ where: eq(deviceTokens.token, token) });
+}
+
+describe("cihaz token'lari", () => {
+  it("token oturuma baglanir; ayni cihaz baska hesaba gecince sahibi degisir", async () => {
+    const a = await makeUser();
+    const b = await makeUser();
+    const sa = await makeSession(a);
+    const sb = await makeSession(b);
+    const token = fcmToken("devir");
+
+    await coreDevices.registerDeviceToken(sa, { token, platform: "android" });
+    expect((await tokenRow(token))?.sessionId).toBe(sa);
+
+    // Ayni telefonda B giris yapti: bildirim artik A'ya GITMEMELI.
+    await coreDevices.registerDeviceToken(sb, { token, platform: "android" });
+    const rows = await db.select().from(deviceTokens).where(eq(deviceTokens.token, token));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sessionId).toBe(sb);
+  });
+
+  it("token yenilenince ayni oturumun eski token'i silinir", async () => {
+    const user = await makeUser();
+    const sid = await makeSession(user);
+    const oldToken = fcmToken("eski");
+    const newToken = fcmToken("yeni");
+
+    await coreDevices.registerDeviceToken(sid, { token: oldToken, platform: "ios" });
+    await coreDevices.registerDeviceToken(sid, { token: newToken, platform: "ios" });
+
+    const rows = await db.select().from(deviceTokens).where(eq(deviceTokens.sessionId, sid));
+    // Iki satir kalsaydi cihaz ayni bildirimi iki kez alabilirdi.
+    expect(rows.map((r) => r.token)).toEqual([newToken]);
+  });
+
+  it("oturum kapaninca token da gider (cikista DELETE gerekmez)", async () => {
+    const user = await makeUser();
+    const sid = await makeSession(user);
+    const token = fcmToken("cikis");
+    await coreDevices.registerDeviceToken(sid, { token, platform: "android" });
+
+    expect((await coreSessions.revokeSession(user, sid)).ok).toBe(true);
+    expect(await tokenRow(token)).toBeUndefined();
+  });
+
+  it("hesap silinince token'lar gider", async () => {
+    const user = await makeUser();
+    const token = fcmToken("silinen");
+    await coreDevices.registerDeviceToken(await makeSession(user), { token, platform: "android" });
+
+    expect((await coreAccount.anonymizeAccount(user.id)).ok).toBe(true);
+    expect(await tokenRow(token)).toBeUndefined();
+  });
+
+  it("baskasinin token'i silinemez", async () => {
+    const victim = await makeUser();
+    const attacker = await makeUser();
+    const token = fcmToken("kurban");
+    await coreDevices.registerDeviceToken(await makeSession(victim), { token, platform: "ios" });
+
+    await coreDevices.removeDeviceToken(attacker, token);
+    expect(await tokenRow(token)).toBeTruthy();
+
+    await coreDevices.removeDeviceToken(victim, token);
+    expect(await tokenRow(token)).toBeUndefined();
+  });
+});
+
+describe("FCM gonderimi", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("aktif cihazlara gider, suresi dolmus oturuma gitmez, olu token silinir", async () => {
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    vi.stubEnv("FIREBASE_PROJECT_ID", "test-proje");
+    vi.stubEnv("FIREBASE_CLIENT_EMAIL", "push@test-proje.iam.gserviceaccount.com");
+    // Env'deki gibi tek satir: gercek satir sonlari "\n" kacisina cevrilir.
+    vi.stubEnv("FIREBASE_PRIVATE_KEY", pem.split("\n").join("\\n"));
+
+    const user = await makeUser();
+    const live = fcmToken("canli");
+    const dead = fcmToken("olu");
+    const expired = fcmToken("suresi-dolmus");
+    await coreDevices.registerDeviceToken(await makeSession(user), { token: live, platform: "android" });
+    await coreDevices.registerDeviceToken(await makeSession(user), { token: dead, platform: "ios" });
+    await coreDevices.registerDeviceToken(await makeSession(user, -1000), { token: expired, platform: "ios" });
+
+    const sentTo: string[] = [];
+    let assertion = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (url === "https://oauth2.googleapis.com/token") {
+          assertion = new URLSearchParams(String(init.body)).get("assertion") ?? "";
+          return Response.json({ access_token: "erisim", expires_in: 3600 });
+        }
+        expect(url).toBe("https://fcm.googleapis.com/v1/projects/test-proje/messages:send");
+        expect(new Headers(init.headers).get("authorization")).toBe("Bearer erisim");
+        const token = JSON.parse(String(init.body)).message.token as string;
+        sentTo.push(token);
+        if (token === dead) {
+          return Response.json(
+            {
+              error: {
+                code: 404,
+                status: "NOT_FOUND",
+                details: [{ "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError", errorCode: "UNREGISTERED" }],
+              },
+            },
+            { status: 404 },
+          );
+        }
+        return Response.json({ name: "projects/test-proje/messages/1" });
+      }),
+    );
+
+    await sendNotifications([
+      { userId: user.id, title: "Baslik", body: "Govde", data: notificationData("request_created", "r1") },
+    ]);
+
+    expect(sentTo.sort()).toEqual([dead, live].sort());
+    expect(sentTo).not.toContain(expired);
+    expect(await tokenRow(dead)).toBeUndefined();
+    expect(await tokenRow(live)).toBeTruthy();
+
+    // JWT gercekten service account anahtariyla imzalanmis olmali.
+    const [header, claims, signature] = assertion.split(".");
+    const verified = createVerify("RSA-SHA256")
+      .update(`${header}.${claims}`)
+      .verify(publicKey, Buffer.from(signature, "base64url"));
+    expect(verified).toBe(true);
+    expect(JSON.parse(Buffer.from(claims, "base64url").toString())).toMatchObject({
+      iss: "push@test-proje.iam.gserviceaccount.com",
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+    });
+  });
+
+  it("yapilandirma yoksa hicbir istek atilmaz", async () => {
+    vi.stubEnv("FIREBASE_PROJECT_ID", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await sendNotifications([
+      { userId: owner.id, title: "x", body: "y", data: notificationData("message", "c") },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

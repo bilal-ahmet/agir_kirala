@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AppError, collectFieldErrors, httpStatus, pgCode, type MutationResult } from "../core/errors";
 import { getCurrentUser, getSessionContext } from "../auth/session";
-import { sendNotifications } from "../notify/onesignal";
+import { sendNotifications } from "../notify/fcm";
 import type { User } from "../types";
 
 /**
@@ -125,6 +125,13 @@ export async function currentTokenHash(): Promise<string> {
   return tokenHash;
 }
 
+/** Aktif oturumun id'si — push token kaydı oturuma bağlanır. */
+export async function currentSessionId(): Promise<string> {
+  const { sessionId } = await getSessionContext();
+  if (!sessionId) throw new AppError("unauthorized", "Bu işlem için oturum açmanız gerekir.");
+  return sessionId;
+}
+
 export function ok(data: unknown, status = 200): NextResponse {
   return NextResponse.json(data, { status });
 }
@@ -158,7 +165,7 @@ export async function parseJson<S extends z.ZodType>(
 export function unwrap<T>(result: MutationResult<T>): T {
   if (!result.ok) throw result.error;
   for (const path of result.revalidate) revalidatePath(path);
-  // after(): yanıt döndükten sonra gönderilir; istemci OneSignal'i beklemez ve
+  // after(): yanıt döndükten sonra gönderilir; istemci FCM'i beklemez ve
   // Vercel'de lambda donmadan önce işin bitmesi garanti altına alınır.
   if (result.notify.length) after(() => sendNotifications(result.notify));
   return result.value;

@@ -125,7 +125,7 @@ export async function anonymizeAccount(userId: string): Promise<MutationResult<{
 
     // Erişim anında kapanır (getSessionContext deletedAt'i zaten reddeder ama
     // satırları bırakmanın anlamı yok) + kişisel tercihler temizlenir.
-    // Push aboneliği OneSignal tarafında: istemci OneSignal.logout() çağırır.
+    // Push token'ları oturuma bağlı: sessions silinince cascade ile gider.
     await tx.delete(sessions).where(eq(sessions.userId, userId));
     await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
     await tx.delete(favorites).where(eq(favorites.userId, userId));

@@ -84,6 +84,8 @@ export interface SessionContext {
   favoriteIds: string[];
   /** Aktif oturumun token hash'i — şifre değiştirmede "bu cihazı atma" için. */
   tokenHash: string | null;
+  /** Aktif oturumun id'si — push token'ı bu oturuma bağlanır. */
+  sessionId: string | null;
 }
 
 /** Authorization: Bearer <token> başlığını okur (yoksa null). */
@@ -105,7 +107,7 @@ async function bearerToken(): Promise<string | null> {
  * Request kapsamında memoize (route handler'da da geçerlidir).
  */
 export const getSessionContext = cache(async (): Promise<SessionContext> => {
-  const empty: SessionContext = { user: null, favoriteIds: [], tokenHash: null };
+  const empty: SessionContext = { user: null, favoriteIds: [], tokenHash: null, sessionId: null };
 
   const token = (await bearerToken()) ?? (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return empty;
@@ -148,7 +150,12 @@ export const getSessionContext = cache(async (): Promise<SessionContext> => {
       .where(eq(sessions.id, row.sessionId));
   }
 
-  return { user: toUser(row.user), favoriteIds: row.favoriteIds ?? [], tokenHash };
+  return {
+    user: toUser(row.user),
+    favoriteIds: row.favoriteIds ?? [],
+    tokenHash,
+    sessionId: row.sessionId,
+  };
 });
 
 /** Geçerli oturum kullanıcısı (yoksa null). Request kapsamında memoize. */

@@ -215,25 +215,46 @@ filtrelerinin **hepsi** açık parametre olarak tanımlı (enum'lar dahil), tek 
 dinamik `spec_*`. Alt nesneler (`Photo`, `PriceMap`, `SpecMap`, `Availability`,
 `Message`, `SignedTarget`) `$ref` ile bağlı — anonim sınıf üretilmez.
 
-## Push bildirimleri (OneSignal)
+## Push bildirimleri (Firebase Cloud Messaging)
 
-Adresleme **External ID** iledir; backend cihaz token'ı saklamaz. Bu yüzden
-`device_tokens` tablosu ve `/device-tokens` uçları kaldırıldı — abonelikleri,
-fan-out'u, tekrar denemeyi ve ölü token temizliğini OneSignal yönetiyor.
+Gönderim **FCM HTTP v1** ile, adresleme **cihaz token'ı** iledir. Token
+`device_tokens` tablosunda **oturuma** bağlı tutulur: çıkış, uzaktan oturum
+kapatma (`DELETE /me/sessions/{id}`), şifre değişimi ve hesap silme oturumu
+siler → token cascade ile gider. Çıkış yapan cihaza başkasının bildirimi
+gitmez, istemci DELETE çağırmayı unutsa bile.
 
-**Flutter tarafında gereken tek şey:**
+| Uç | Ne zaman |
+|---|---|
+| `POST /device-tokens` `{ token, platform: "ios" \| "android" }` | Girişten sonra ve her `onTokenRefresh`'te. Aynı oturumun eski token'ı değiştirilir; token başka hesaba geçtiyse sahibi güncellenir. |
+| `DELETE /device-tokens` `{ token }` | Kullanıcı uygulamadan bildirimleri kapattığında. Çıkışta GEREKMEZ. |
+
+**Flutter (`firebase_messaging`):**
 
 ```dart
-OneSignal.initialize(ONESIGNAL_APP_ID);
-await OneSignal.Notifications.requestPermission(true);
-await OneSignal.login(user.id);   // giriş sonrası — External ID
-await OneSignal.logout();         // çıkış / hesap silme sonrası
+await FirebaseMessaging.instance.requestPermission();
+final token = await FirebaseMessaging.instance.getToken();
+await api.registerDeviceToken(token: token!, platform: Platform.isIOS ? "ios" : "android");
+FirebaseMessaging.instance.onTokenRefresh.listen(
+  (t) => api.registerDeviceToken(token: t, platform: ...),
+);
+
+// Dokunma → derin bağlantı (bkz. data.route)
+FirebaseMessaging.onMessageOpenedApp.listen((m) => router.go(m.data["route"] ?? "/"));
+final initial = await FirebaseMessaging.instance.getInitialMessage(); // soğuk açılış
 ```
 
-`OneSignal.login()` çağrılmazsa bildirim gitmez: backend kullanıcı id'siyle
-hedefliyor ve OneSignal o id'yi tanımıyor.
+`POST /device-tokens` çağrılmazsa bildirim gitmez. Uygulama ön plandayken FCM
+`notification` yükünü sistem tepsisinde GÖSTERMEZ; gerekiyorsa `onMessage` ile
+yerel bildirim (ör. `flutter_local_notifications`) gösterilmeli.
 
-**Env:** `ONESIGNAL_APP_ID`, `ONESIGNAL_API_KEY` (REST API Key — gizli).
+iOS: Firebase Console → Cloud Messaging'e APNs auth key (.p8) yüklenmeli;
+yoksa iOS token'ları alınır ama bildirim teslim edilmez.
+
+Ölü token temizliği backend'de: FCM `UNREGISTERED` / `SENDER_ID_MISMATCH`
+dönerse token silinir. Süresi dolmuş oturumların token'larına gönderim yapılmaz.
+
+**Env:** `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
+(service account JSON'undan — gizli; private key tek satır, `\n` kaçışlı).
 Tanımlı değilse bildirim sessizce atlanır; geliştirme ve testler etkilenmez.
 
 ### Tetikleyiciler
@@ -248,7 +269,7 @@ Tanımlı değilse bildirim sessizce atlanır; geliştirme ve testler etkilenmez
 | Yeni değerlendirme | ilan sahibi | `review_created` | yorum id |
 
 Bildirim **hiçbir zaman eylemi yapana gitmez.** `data` içindeki her değer
-STRING'dir (OneSignal sözleşmesi).
+STRING'dir (FCM `data` sözleşmesi).
 
 ### Derin bağlantı: `data.route`
 
@@ -285,5 +306,5 @@ core mutasyonu → MutationResult { value, revalidate, notify }
 
 `after()` şart: Vercel'de yanıttan sonra başlatılan ateşle-unut bir iş, lambda
 donduğu için tamamlanmayabilir. Beklemek de yanlış olurdu — mesaj zaten
-kaydedildi, kullanıcı OneSignal'i beklememeli. Gönderim hataları loglanır ve
+kaydedildi, kullanıcı FCM'i beklememeli. Gönderim hataları loglanır ve
 yutulur; bildirim gidemedi diye mutasyon başarısız sayılmaz.

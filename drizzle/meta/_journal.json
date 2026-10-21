@@ -43,6 +43,13 @@
       "when": 1791979404447,
       "tag": "0005_lowbed_to_tir",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792592084713,
+      "tag": "0006_device_tokens_fcm",
+      "breakpoints": true
     }
   ]
 }

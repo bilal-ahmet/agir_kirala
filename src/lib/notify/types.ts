@@ -18,7 +18,7 @@ export type NotificationKind =
 /**
  * İstemcinin derin bağlantı için kullandığı veri.
  *
- * OneSignal `data` alanındaki her değeri STRING olarak taşır; Flutter tarafında
+ * FCM `data` alanındaki her değeri STRING olarak taşır; Flutter tarafında
  * `int` beklemek çalışma anında patlar. Bu yüzden tipi baştan string'e kapattık.
  */
 export interface NotificationData {
@@ -84,7 +84,7 @@ export function notificationData(
 }
 
 export interface Notification {
-  /** Alıcı — OneSignal'de External ID olarak bu kullanıcı id'si kullanılır. */
+  /** Alıcı — bu kullanıcının aktif oturumlarına bağlı tüm cihazlara gider. */
   userId: string;
   title: string;
   body: string;

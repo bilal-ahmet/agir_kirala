@@ -187,6 +187,10 @@
           },
           "yillik": {
             "type": "number"
+          },
+          "sefer": {
+            "description": "Sefer başı fiyat (yalnız tır ilanlarında).",
+            "type": "number"
           }
         },
         "description": "Periyot → tam sayı TL. Sahibi yalnız sunduğu periyotları doldurur."
@@ -380,7 +384,8 @@
               "gunluk",
               "haftalik",
               "aylik",
-              "yillik"
+              "yillik",
+              "sefer"
             ]
           },
           "message": {
@@ -844,6 +849,96 @@
           "totalActive",
           "categoryCounts",
           "featured"
+        ]
+      },
+      "VoiceSearchResult": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Normalleştirilmiş cümle."
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "GET /listings sorgu parametreleri (q, kategori, altKategori, il, ilce, marka, periyot, operator, nakliye, durum, yakit, minFiyat, maxFiyat, minYil, sirala, spec_*). Çoklu değerler virgülle ayrılır."
+          },
+          "chips": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoiceChip"
+            }
+          },
+          "remainder": {
+            "type": "string",
+            "description": "Hiçbir filtreye dönüşmeyen kelimeler (bilgi amaçlı)."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "rules",
+              "llm"
+            ],
+            "description": "rules: sözlük eşleme. llm: serbest cümle için LLM yedeği de kullanıldı."
+          }
+        },
+        "required": [
+          "text",
+          "params",
+          "chips",
+          "remainder",
+          "source"
+        ]
+      },
+      "VoiceChip": {
+        "type": "object",
+        "properties": {
+          "param": {
+            "type": "string",
+            "description": "Sorgu parametresi adı (ör. il, marka, spec_guc)."
+          },
+          "value": {
+            "type": "string",
+            "description": "Tek değer; çoklu parametrelerde listenin bir öğesi."
+          },
+          "label": {
+            "type": "string",
+            "description": "Türkçe görünen ad."
+          }
+        },
+        "required": [
+          "param",
+          "value",
+          "label"
+        ]
+      },
+      "HaulingSuggestions": {
+        "type": "object",
+        "properties": {
+          "applicable": {
+            "type": "boolean",
+            "description": "false → istemci nakliye bölümünü göstermez."
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            }
+          },
+          "searchParams": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "\"Tümünü gör\" için GET /listings sorgu parametreleri."
+          }
+        },
+        "required": [
+          "applicable",
+          "results",
+          "searchParams"
         ]
       },
       "CreatedId": {
@@ -1854,7 +1949,7 @@
     "/api/v1/me/badges": {
       "get": {
         "operationId": "getBadges",
-        "summary": "Bekleyen talep + okunmamış sohbet sayısı (push yerine polling).",
+        "summary": "Bekleyen talep + okunmamış sohbet sayısı.",
         "security": [
           {
             "bearerAuth": []
@@ -1867,6 +1962,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Badges"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/parse": {
+      "post": {
+        "operationId": "parseVoiceSearch",
+        "summary": "Sesli arama: cihazda metne çevrilmiş cümleyi arama filtrelerine çevirir (ör. \"İstanbul'da operatörlü JCB kepçe\"). Dönen params olduğu gibi GET /listings sorgusuna eklenir.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Anlaşılmayan cümle hata değildir: params boş döner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSearchResult"
                 }
               }
             }
@@ -1975,7 +2129,8 @@
                   "gunluk",
                   "haftalik",
                   "aylik",
-                  "yillik"
+                  "yillik",
+                  "sefer"
                 ]
               }
             },
@@ -2283,6 +2438,10 @@
                       "yillik": {
                         "type": "number",
                         "exclusiveMinimum": 0
+                      },
+                      "sefer": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
                       }
                     }
                   },
@@ -2564,6 +2723,10 @@
                       "yillik": {
                         "type": "number",
                         "exclusiveMinimum": 0
+                      },
+                      "sefer": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
                       }
                     }
                   },
@@ -2800,6 +2963,55 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Ack"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/listings/{id}/hauling": {
+      "get": {
+        "operationId": "getHaulingListings",
+        "summary": "İş makinesi ilanı için nakliye (tır) önerileri: makineyi taşıyabilecek lowbed / açık kasa tırlar, önce aynı il. applicable=false ise öneri anlamsızdır (tır ilanı, kendi yola çıkan makine, nakliye dahil).",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Başarılı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingSuggestions"
                 }
               }
             }
@@ -3480,7 +3692,8 @@
                       "gunluk",
                       "haftalik",
                       "aylik",
-                      "yillik"
+                      "yillik",
+                      "sefer"
                     ]
                   },
                   "message": {
@@ -4125,6 +4338,124 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/device-tokens": {
+      "post": {
+        "operationId": "registerDeviceToken",
+        "summary": "FCM cihaz token'ı kaydet (girişte ve onTokenRefresh'te). Token oturuma bağlanır; çıkışta kendiliğinden silinir.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 4096
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ios",
+                      "android"
+                    ]
+                  }
+                },
+                "required": [
+                  "token",
+                  "platform"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Başarılı."
+          },
+          "4XX": {
+            "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Sunucu hatası — `error.code` her zaman `internal`. Gövde asla iç detay taşımaz.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDeviceToken",
+        "summary": "FCM cihaz token'ını sil (bildirimleri kapat).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Başarılı."
           },
           "4XX": {
             "description": "Hata zarfı. Statü `error.code` tarafından belirlenir.",

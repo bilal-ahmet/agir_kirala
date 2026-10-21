@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import type { MutationResult } from "../core/errors";
 import type { Notification } from "../notify/types";
-import { sendNotifications } from "../notify/onesignal";
+import { sendNotifications } from "../notify/fcm";
 
 /**
  * Core mutasyon sonucunu taşıma katmanına bağlar.
@@ -23,9 +23,9 @@ export function applyRevalidation(paths: string[]): void {
  *
  * `after()` şart: Vercel'de yanıt döndükten sonra başlatılan "ateşle-unut" bir
  * iş, lambda dondurulduğu için hiç tamamlanmayabilir. Beklemek de yanlış olurdu —
- * mesaj zaten kaydedildi, kullanıcı OneSignal'in yavaşlığını beklememeli.
+ * mesaj zaten kaydedildi, kullanıcı FCM'in yavaşlığını beklememeli.
  *
- * Gönderim hataları yutulur (onesignal.ts içinde loglanır): bildirim
+ * Gönderim hataları yutulur (fcm.ts içinde loglanır): bildirim
  * gidemedi diye mesaj gönderimi başarısız sayılmaz.
  */
 export function dispatchNotifications(notifications: Notification[]): void {
