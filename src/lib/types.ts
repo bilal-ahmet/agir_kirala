@@ -179,15 +179,15 @@ export interface RentalRequest {
   listingId: string;
   renterId: string;
   ownerId: string;
-  /** ISO tarih */
-  startDate: string;
-  endDate: string;
+  /** ISO tarih (YYYY-MM-DD). Opsiyonel: müşteri tarih belirtmeden talep gönderebilir. */
+  startDate: string | null;
+  endDate: string | null;
   period: RentalPeriod;
   message: string;
   status: RequestStatus;
   createdAt: string;
-  /** Hesaplanan toplam tutar (₺) */
-  totalPrice: number;
+  /** Hesaplanan toplam tutar (₺). Tarih yoksa null ("fiyat görüşülecek"). */
+  totalPrice: number | null;
 }
 
 export interface Message {

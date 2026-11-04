@@ -86,7 +86,7 @@ export function toRequest(row: RentalRequestRow): RentalRequest {
     message: row.message,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
-    totalPrice: Number(row.totalPrice),
+    totalPrice: row.totalPrice == null ? null : Number(row.totalPrice),
   };
 }
 

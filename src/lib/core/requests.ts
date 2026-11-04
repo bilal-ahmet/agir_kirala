@@ -5,6 +5,7 @@ import { db } from "../db";
 import { listings, rentalRequests } from "../db/schema";
 import { getListingById } from "../db/queries/listings";
 import { computeRentalTotal } from "../pricing";
+import { primaryPrice } from "../format";
 import type { RequestStatus, User } from "../types";
 import { fail, mutated, pgConstraint, type MutationResult } from "./errors";
 import { createRentalRequestSchema, updateRequestStatusSchema, type CreateRentalRequestInput } from "./schemas";
@@ -29,22 +30,35 @@ export async function createRentalRequest(
     return fail("self_action", "Kendi ilanınıza talep gönderemezsiniz.");
   }
 
-  // Tutar server'da yeniden hesaplanır (client'a güvenilmez).
-  const calc = computeRentalTotal(
-    listing.prices,
-    d.period,
-    d.startDate,
-    d.endDate,
-    d.startTime ?? "",
-    d.endTime ?? "",
-  );
-  if (!calc) return fail("validation", "Tutar hesaplanamadı. Tarih ve periyodu kontrol edin.");
-  // Sefer kiralamasında süre değil sefer satılır; minimum gün kuralı uygulanmaz.
-  if (d.period !== "sefer" && listing.minRentalDays && calc.days < listing.minRentalDays) {
-    return fail(
-      "validation",
-      `Bu ilan için minimum kiralama süresi ${listing.minRentalDays} gündür.`,
+  // Tarihler opsiyonel; boş string "belirtilmedi" demektir.
+  const startDate = d.startDate || null;
+  const endDate = d.endDate || null;
+  if (endDate && !startDate) return fail("validation", "Bitiş tarihi için başlangıç tarihi de seçin.");
+  if (startDate && endDate && endDate < startDate) {
+    return fail("validation", "Bitiş tarihi başlangıçtan önce olamaz.");
+  }
+  const period = d.period ?? primaryPrice(listing.prices)?.period ?? "gunluk";
+
+  // Tutar yalnız iki tarih de varsa ve server'da yeniden hesaplanır (client'a güvenilmez).
+  let totalPrice: string | null = null;
+  if (startDate && endDate) {
+    const calc = computeRentalTotal(
+      listing.prices,
+      period,
+      startDate,
+      endDate,
+      d.startTime ?? "",
+      d.endTime ?? "",
     );
+    if (!calc) return fail("validation", "Tutar hesaplanamadı. Tarih ve periyodu kontrol edin.");
+    // Sefer kiralamasında süre değil sefer satılır; minimum gün kuralı uygulanmaz.
+    if (period !== "sefer" && listing.minRentalDays && calc.days < listing.minRentalDays) {
+      return fail(
+        "validation",
+        `Bu ilan için minimum kiralama süresi ${listing.minRentalDays} gündür.`,
+      );
+    }
+    totalPrice = calc.total.toFixed(2);
   }
 
   const timeNote =
@@ -58,12 +72,12 @@ export async function createRentalRequest(
         listingId: listing.id,
         renterId: user.id,
         ownerId: listing.ownerId,
-        startDate: d.startDate,
-        endDate: d.endDate,
-        period: d.period,
+        startDate,
+        endDate,
+        period,
         message: fullMessage,
         status: "beklemede",
-        totalPrice: calc.total.toFixed(2),
+        totalPrice,
       })
       .returning({ id: rentalRequests.id });
 
@@ -71,7 +85,7 @@ export async function createRentalRequest(
     const notification: Notification = {
       userId: listing.ownerId,
       title: "Yeni kiralama talebi",
-      body: preview(`${user.name} · ${listing.title} · ${d.startDate} → ${d.endDate}`),
+      body: preview(`${user.name} · ${listing.title} · ${dateNote(startDate, endDate)}`),
       data: notificationData("request_created", created.id, listing.id),
     };
 
@@ -84,10 +98,21 @@ export async function createRentalRequest(
      * Yalnız BU constraint çevrilir; diğer 23505'ler gerçek hata olarak yükselir.
      */
     if (pgConstraint(e) === "rental_requests_dedupe") {
-      return fail("conflict", "Bu tarihler için zaten bekleyen bir talebiniz var.");
+      return fail(
+        "conflict",
+        startDate
+          ? "Bu tarihler için zaten bekleyen bir talebiniz var."
+          : "Bu ilan için zaten bekleyen bir talebiniz var.",
+      );
     }
     throw e;
   }
+}
+
+/** Bildirimde tarih aralığı; tarih yoksa açıkça "belirtilmedi". */
+function dateNote(start: string | null, end: string | null): string {
+  if (!start) return "Tarih belirtilmedi";
+  return end ? `${start} → ${end}` : `${start} başlangıçlı`;
 }
 
 /** Talep durumu güncelle: owner onaylar/reddeder, renter iptal eder. */

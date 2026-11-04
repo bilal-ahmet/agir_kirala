@@ -128,13 +128,19 @@ const requestSchema = z.object({
   listingId: z.string(),
   renterId: z.string(),
   ownerId: z.string(),
-  startDate: z.string().describe("YYYY-MM-DD — yerel gün, saat dilimi taşımaz."),
-  endDate: z.string().describe("YYYY-MM-DD"),
+  startDate: z
+    .string()
+    .nullable()
+    .describe("YYYY-MM-DD — yerel gün, saat dilimi taşımaz. NULL: müşteri tarih belirtmedi."),
+  endDate: z.string().nullable().describe("YYYY-MM-DD. NULL: belirtilmedi (yalnız başlangıç verilmiş olabilir)."),
   period: z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sefer"]),
   message: z.string(),
   status: z.enum(["beklemede", "onaylandi", "reddedildi", "iptal"]),
   createdAt: z.string().describe("ISO-8601 UTC."),
-  totalPrice: z.string().describe("Ondalık STRING (ör. \"16000.00\")."),
+  totalPrice: z
+    .string()
+    .nullable()
+    .describe("Ondalık STRING (ör. \"16000.00\"). NULL: tarih yok, tutar hesaplanamadı (fiyat görüşülecek)."),
 });
 
 const messageSchema = z.object({
@@ -480,7 +486,7 @@ const ENDPOINTS: Endpoint[] = [
 
   { method: "get", path: "/requests/incoming", id: "getIncomingRequests", summary: "Gelen talepler (ilan sahibi olarak).", auth: true, response: listOf(ref("RequestView")) },
   { method: "get", path: "/requests/outgoing", id: "getOutgoingRequests", summary: "Gönderdiğim talepler.", auth: true, response: listOf(ref("RequestView")) },
-  { method: "post", path: "/requests", id: "createRentalRequest", summary: "Kiralama talebi. Aynı tarihlere ikinci bekleyen talep 409 döner.", auth: true, request: createRentalRequestSchema, response: ref("CreatedId"), status: 201 },
+  { method: "post", path: "/requests", id: "createRentalRequest", summary: "Kiralama talebi. Tüm alanlar (tarih, saat, periyot, mesaj) opsiyonel; tarih yoksa totalPrice null. Aynı ilan + aynı tarihlere (tarihsiz dahil) ikinci bekleyen talep 409 döner.", auth: true, request: createRentalRequestSchema, response: ref("CreatedId"), status: 201 },
   { method: "patch", path: "/requests/{id}/status", id: "updateRequestStatus", summary: "Talep durumu (onayla/reddet ilan sahibi, iptal kiralayan).", auth: true, params: ["id"], request: requestStatusBodySchema, response: ref("Ack") },
 
   { method: "get", path: "/conversations", id: "getConversations", summary: "Sohbetler (okunmamış bayrağıyla).", auth: true, response: listOf(ref("ConversationView")) },

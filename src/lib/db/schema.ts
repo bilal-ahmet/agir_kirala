@@ -168,12 +168,17 @@ export const rentalRequests = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    startDate: date("start_date").notNull(),
-    endDate: date("end_date").notNull(),
+    /**
+     * Tarihler ve tutar OPSİYONEL: müşteri tarih belirtmeden de satıcıyla
+     * iletişime geçebilir. Tarih yoksa tutar hesaplanamaz → total_price NULL
+     * ("fiyat görüşülecek"). Yalnız başlangıç verilebilir.
+     */
+    startDate: date("start_date"),
+    endDate: date("end_date"),
     period: rentalPeriodEnum("period").notNull(),
     message: text("message").notNull().default(""),
     status: requestStatusEnum("status").notNull().default("beklemede"),
-    totalPrice: numeric("total_price", { precision: 14, scale: 2 }).notNull().default("0"),
+    totalPrice: numeric("total_price", { precision: 14, scale: 2 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -186,9 +191,18 @@ export const rentalRequests = pgTable(
      * sonrası retry). Aynı ilan + kiralayan + tarih aralığı için yalnızca TEK
      * "beklemede" talep olabilir. Kısmi index olması bilinçli: talep iptal/red
      * edildikten sonra aynı tarihlere yeniden talep atılabilir.
+     *
+     * Tarihler NULL olabildiği için coalesce'lenir: unique index'te NULL'lar
+     * birbirinden FARKLI sayılır, aksi halde tarihsiz çift gönderim dedupe
+     * edilmezdi.
      */
     uniqueIndex("rental_requests_dedupe")
-      .on(t.listingId, t.renterId, t.startDate, t.endDate)
+      .on(
+        t.listingId,
+        t.renterId,
+        sql`coalesce(${t.startDate}, '0001-01-01'::date)`,
+        sql`coalesce(${t.endDate}, '0001-01-01'::date)`,
+      )
       .where(sql`status = 'beklemede'`),
   ],
 );

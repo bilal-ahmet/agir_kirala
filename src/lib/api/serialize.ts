@@ -69,11 +69,15 @@ export function toPublicUser(user: User, includePhone = false): ApiPublicUser {
 }
 
 export interface ApiRentalRequest extends Omit<RentalRequest, "totalPrice"> {
-  totalPrice: string;
+  /** Tarihsiz talepte null (tutar hesaplanamaz). */
+  totalPrice: string | null;
 }
 
 export function serializeRequest(request: RentalRequest): ApiRentalRequest {
-  return { ...request, totalPrice: request.totalPrice.toFixed(2) };
+  return {
+    ...request,
+    totalPrice: request.totalPrice == null ? null : request.totalPrice.toFixed(2),
+  };
 }
 
 export interface ApiConversation extends Conversation {

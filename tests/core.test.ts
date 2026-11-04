@@ -256,6 +256,38 @@ describe("talepler", () => {
     expectFail(await coreRequests.createRentalRequest(renter, body), "conflict");
   });
 
+  it("tarihsiz talep: hiçbir alan zorunlu değil, tutar null, çift gönderim 409", async () => {
+    // Web formu boş alanları "" olarak gönderir; periyot da verilmeyebilir.
+    const res = await coreRequests.createRentalRequest(renter, {
+      listingId,
+      startDate: "",
+      endDate: "",
+    });
+    const { id } = value<{ id: string }>(res);
+    const row = await db.query.rentalRequests.findFirst({ where: eq(rentalRequests.id, id) });
+    expect(row?.startDate).toBeNull();
+    expect(row?.endDate).toBeNull();
+    expect(row?.totalPrice).toBeNull();
+    expect(row?.period).toBeTruthy();
+    // NULL tarihler unique index'te coalesce'lendiği için tarihsiz tekrar da yakalanır.
+    expectFail(await coreRequests.createRentalRequest(renter, { listingId }), "conflict");
+  });
+
+  it("yalnız bitiş tarihi ya da ters aralık reddedilir", async () => {
+    expectFail(
+      await coreRequests.createRentalRequest(renter, { listingId, endDate: "2026-09-03" }),
+      "validation",
+    );
+    expectFail(
+      await coreRequests.createRentalRequest(renter, {
+        listingId,
+        startDate: "2026-09-05",
+        endDate: "2026-09-03",
+      }),
+      "validation",
+    );
+  });
+
   it("yayında olmayan ilana talep gönderilemez", async () => {
     const { id } = value<{ id: string }>(
       await coreListings.createListing(owner, listingInput({ status: "taslak" })),

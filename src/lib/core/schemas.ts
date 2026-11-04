@@ -131,12 +131,25 @@ export type UpdateListingInput = z.input<typeof updateListingSchema>;
 
 // ───────── Talepler ─────────
 
+/** "YYYY-MM-DD" ya da boş: talepte tarih OPSİYONEL (boş string = belirtilmedi). */
+const optionalDay = (message: string) =>
+  z
+    .string()
+    .regex(/^(\d{4}-\d{2}-\d{2})?$/, message)
+    .nullish();
+
+/**
+ * Kiralama talebi. Hiçbir alan zorunlu değil: müşteri tarih belirtmeden de
+ * satıcıyla iletişime geçebilir. Tarih yoksa tutar hesaplanmaz (null).
+ * Bitiş verilmişse başlangıç da verilmeli (core/requests.ts doğrular).
+ */
 export const createRentalRequestSchema = z.object({
   listingId: z.string().uuid(),
-  /** "YYYY-MM-DD" — yerel gün, saat dilimi taşımaz. */
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Başlangıç tarihi geçersiz."),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Bitiş tarihi geçersiz."),
-  period: z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sefer"]),
+  /** "YYYY-MM-DD" — yerel gün, saat dilimi taşımaz. Opsiyonel. */
+  startDate: optionalDay("Başlangıç tarihi geçersiz."),
+  endDate: optionalDay("Bitiş tarihi geçersiz."),
+  /** Verilmezse ilanın birincil fiyat periyodu kullanılır. */
+  period: z.enum(["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sefer"]).optional(),
   message: z.string().trim().max(2000).default(""),
   startTime: z.string().optional(),
   endTime: z.string().optional(),

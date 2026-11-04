@@ -120,7 +120,7 @@ async function main() {
         period: r.period,
         message: r.message,
         status: r.status,
-        totalPrice: r.totalPrice.toFixed(2),
+        totalPrice: r.totalPrice == null ? null : r.totalPrice.toFixed(2),
         createdAt: new Date(r.createdAt),
       },
     ];

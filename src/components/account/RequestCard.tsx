@@ -62,10 +62,20 @@ export function RequestCard({ request, role, listing, counterpartName }: Request
             {role === "incoming" ? "Talep eden: " : "İlan sahibi: "}
             <span className="text-fg">{counterpartName}</span>
           </p>
+          {/* Tarih ve tutar opsiyonel: müşteri tarih belirtmeden de talep gönderebilir. */}
           <p className="mt-0.5 text-sm text-muted">
-            {formatDate(request.startDate)} – {formatDate(request.endDate)} · {PERIOD_LABELS[request.period]}
+            {request.startDate
+              ? request.endDate
+                ? `${formatDate(request.startDate)} – ${formatDate(request.endDate)}`
+                : `${formatDate(request.startDate)} başlangıçlı`
+              : "Tarih belirtilmedi"}{" "}
+            · {PERIOD_LABELS[request.period]}
           </p>
-          <p className="mt-1 font-bold text-accent">{formatPrice(request.totalPrice)}</p>
+          {request.totalPrice != null ? (
+            <p className="mt-1 font-bold text-accent">{formatPrice(request.totalPrice)}</p>
+          ) : (
+            <p className="mt-1 text-sm font-semibold text-muted">Fiyat görüşülecek</p>
+          )}
         </div>
       </div>
 

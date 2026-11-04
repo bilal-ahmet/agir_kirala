@@ -49,14 +49,16 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
       router.push(`/giris?next=/ilanlar/${listing.id}`);
       return;
     }
-    if (!start || !end) return setError("Lütfen başlangıç ve bitiş tarihi seçin.");
-    const days = daysBetween(start, end);
-    if (days <= 0) return setError("Bitiş tarihi başlangıçtan sonra olmalıdır.");
-    // Sefer kiralamasında süre değil sefer satılır; minimum gün kuralı uygulanmaz.
-    if (period !== "sefer" && listing.minRentalDays && days < listing.minRentalDays) {
-      return setError(`Bu ilan için minimum kiralama süresi ${listing.minRentalDays} gündür.`);
+    // Hiçbir alan zorunlu değil. Yalnız GİRİLEN değerler tutarlı olmalı.
+    if (end && !start) return setError("Bitiş tarihi için başlangıç tarihini de seçin.");
+    if (start && end) {
+      const days = daysBetween(start, end);
+      if (days <= 0) return setError("Bitiş tarihi başlangıçtan önce olamaz.");
+      // Sefer kiralamasında süre değil sefer satılır; minimum gün kuralı uygulanmaz.
+      if (period !== "sefer" && listing.minRentalDays && days < listing.minRentalDays) {
+        return setError(`Bu ilan için minimum kiralama süresi ${listing.minRentalDays} gündür.`);
+      }
     }
-    if (!calc) return setError("Tutar hesaplanamadı.");
 
     startTransition(async () => {
       // Tutar ve tam mesaj (saat notu dahil) server'da yeniden oluşturulur.
@@ -105,6 +107,10 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
 
   return (
     <form onSubmit={submit} className="space-y-3">
+      <p className="rounded-md border border-info/30 bg-info-soft px-3 py-2 text-xs text-fg">
+        Hiçbir alanın doldurulması zorunlu değildir. Tarih belirtmeden de satıcıyla
+        iletişime geçebilirsiniz; tarih seçerseniz tahmini tutar hesaplanır.
+      </p>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Başlangıç Tarihi">
           <Input type="date" min={todayStr} value={start} onChange={(e) => setStart(e.target.value)} />
@@ -143,7 +149,7 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
       )}
 
       <div>
-        <Label>Mesaj (opsiyonel)</Label>
+        <Label>Mesaj <span className="font-normal text-faint">(isteğe bağlı)</span></Label>
         <Textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
