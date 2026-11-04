@@ -142,7 +142,7 @@ describe("alt kategoriye özel alanlar", () => {
   });
 
   it("boolean filtre parametresi aramada eşleşir", () => {
-    expect(parseFilters({ spec_adr: "true" }).specs).toEqual({ adr: "true" });
+    expect(parseFilters({ spec_adr: "true" }).specs).toEqual({ adr: ["true"] });
   });
 });
 

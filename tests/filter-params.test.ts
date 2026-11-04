@@ -64,12 +64,43 @@ describe("çoklu seçimler", () => {
   });
 });
 
+describe("kategori ve konum çoklu seçimi", () => {
+  it("tek değer geriye uyumlu: diziye çevrilir", () => {
+    expect(parseFilters({ kategori: "hafriyat", il: "İstanbul" })).toMatchObject({
+      kategori: ["hafriyat"],
+      il: ["İstanbul"],
+    });
+  });
+
+  it("virgüllü değerler ayrılır, boşluk ve tekrar temizlenir", () => {
+    const f = parseFilters({
+      kategori: "hafriyat, vinc-platform,hafriyat",
+      altKategori: "paletli-ekskavator",
+      il: "İstanbul,Kocaeli",
+      ilce: "Kadıköy,,Üsküdar",
+    });
+    expect(f.kategori).toEqual(["hafriyat", "vinc-platform"]);
+    expect(f.altKategori).toEqual(["paletli-ekskavator"]);
+    expect(f.il).toEqual(["İstanbul", "Kocaeli"]);
+    expect(f.ilce).toEqual(["Kadıköy", "Üsküdar"]);
+  });
+
+  it("boş parametre undefined", () => {
+    expect(parseFilters({ kategori: "", il: "," }).kategori).toBeUndefined();
+    expect(parseFilters({ il: "," }).il).toBeUndefined();
+  });
+});
+
 describe("dinamik teknik filtreler", () => {
-  it("spec_ öneki soyulur, sayısal değerler sayıya çevrilir", () => {
+  it("spec_ öneki soyulur, sayısal değerler sayıya, metinler seçenek listesine çevrilir", () => {
     expect(parseFilters({ spec_operasyonAgirligi: "20", spec_kabin: "kapali" }).specs).toEqual({
       operasyonAgirligi: 20,
-      kabin: "kapali",
+      kabin: ["kapali"],
     });
+  });
+
+  it("metin alanında virgüllü birden çok seçenek", () => {
+    expect(parseFilters({ spec_kabin: "kapali,acik" }).specs).toEqual({ kabin: ["kapali", "acik"] });
   });
 });
 

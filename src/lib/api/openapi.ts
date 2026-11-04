@@ -319,26 +319,26 @@ const LISTING_QUERY_PARAMS: Json[] = [
     description:
       "Serbest metin araması (başlık, marka, model). Kelimeler ayrı ayrı aranır, her kelime bu alanlardan birinde geçmeli; sıra ve bitişiklik önemsizdir.",
   },
-  {
-    name: "kategori",
-    in: "query",
-    required: false,
-    schema: { type: "string" },
-    description: "Kategori slug'ı. Geçerli değerler GET /meta içinde.",
-  },
-  {
-    name: "altKategori",
-    in: "query",
-    required: false,
-    schema: { type: "string" },
-    description: "Alt kategori slug'ı.",
-  },
+  named(
+    "kategori",
+    csv([], "Kategori slug'ları, virgülle ayrılmış. Geçerli değerler GET /meta içinde."),
+  ),
+  named(
+    "altKategori",
+    csv(
+      [],
+      "Alt kategori slug'ları, virgülle ayrılmış. Kategoriyle hiyerarşik VEYA: her seçili kategoride, ona ait seçili alt kategori varsa yalnız onlar, yoksa kategorinin tamamı.",
+    ),
+  ),
   named(
     "marka",
     csv([], "Marka adları, virgülle ayrılmış. Serbest metin — GET /meta içindeki listeden seçilir."),
   ),
-  { name: "il", in: "query", required: false, schema: { type: "string" }, description: "İl adı." },
-  { name: "ilce", in: "query", required: false, schema: { type: "string" }, description: "İlçe adı." },
+  named("il", csv([], "İl adları, virgülle ayrılmış.")),
+  named(
+    "ilce",
+    csv([], "İlçe adları, virgülle ayrılmış. Web yalnız TEK il seçiliyken ilçe sunar (ilçe adları iller arasında tekrar eder)."),
+  ),
   named(
     "periyot",
     csv(
@@ -421,7 +421,7 @@ const LISTING_QUERY_PARAMS: Json[] = [
     required: false,
     schema: { type: "string" },
     description:
-      "Kategoriye özel teknik filtre, ör. `spec_operasyonAgirligi=20`. Sayısal alanlarda MİNİMUM eşik, metin alanlarında tam eşleşme. Geçerli anahtarlar GET /meta içinde.",
+      "Kategoriye özel teknik filtre, ör. `spec_operasyonAgirligi=20`. Sayısal alanlarda MİNİMUM eşik; metin alanlarında virgülle ayrılmış seçeneklerden herhangi biriyle tam eşleşme (`spec_kabin=kapali,acik`). Geçerli anahtarlar GET /meta içinde.",
   },
 ];
 

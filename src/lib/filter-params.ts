@@ -50,6 +50,14 @@ function flag(v: string | string[] | undefined): true | undefined {
   return s === "1" || s === "true" ? true : undefined;
 }
 
+/** Virgülle ayrılmış serbest çoklu değer (kategori, il, marka...). Boşsa undefined. */
+function csv(v: string | string[] | undefined): string[] | undefined {
+  const s = str(v);
+  if (!s) return undefined;
+  const out = Array.from(new Set(s.split(",").map((x) => x.trim()).filter(Boolean)));
+  return out.length ? out : undefined;
+}
+
 /** Virgülle ayrılmış çoklu seçim değerini diziye çevirir (izin verilen değerlerle sınırlar). */
 function list<T extends string>(
   v: string | string[] | undefined,
@@ -73,25 +81,28 @@ const RENTAL_PERIODS = ["saatlik", "gunluk", "haftalik", "aylik", "yillik", "sef
 
 /** searchParams nesnesini FilterState'e çevirir. */
 export function parseFilters(params: RawParams): FilterState {
-  const specs: Record<string, number | string> = {};
+  const specs: Record<string, number | string[]> = {};
   for (const [key, value] of Object.entries(params)) {
     if (key.startsWith("spec_")) {
-      const s = str(value);
-      if (s == null || s === "") continue;
+      const s = str(value)?.trim();
+      if (!s) continue;
+      // Sayı → "en az" eşiği; metin → virgüllü seçenek listesi (herhangi biri).
       const n = Number(s);
-      specs[key.slice(5)] = Number.isFinite(n) ? n : s;
+      if (Number.isFinite(n)) specs[key.slice(5)] = n;
+      else {
+        const options = csv(s);
+        if (options) specs[key.slice(5)] = options;
+      }
     }
   }
 
-  const markaRaw = str(params.marka);
-
   return {
     q: str(params.q),
-    kategori: str(params.kategori),
-    altKategori: str(params.altKategori),
-    marka: markaRaw ? markaRaw.split(",").filter(Boolean) : undefined,
-    il: str(params.il),
-    ilce: str(params.ilce),
+    kategori: csv(params.kategori),
+    altKategori: csv(params.altKategori),
+    marka: csv(params.marka),
+    il: csv(params.il),
+    ilce: csv(params.ilce),
     periyot: list<RentalPeriod>(params.periyot, RENTAL_PERIODS),
     minFiyat: nonNegative(params.minFiyat),
     maxFiyat: nonNegative(params.maxFiyat),
@@ -110,13 +121,13 @@ export function parseFilters(params: RawParams): FilterState {
   };
 }
 
-/** Aktif filtre sayısı (rozet için). q ve sirala sayılmaz. */
+/** Aktif filtre sayısı (rozet için). q, kategori ve sirala sayılmaz. */
 export function activeFilterCount(f: FilterState): number {
   let n = 0;
-  if (f.altKategori) n++;
+  if (f.altKategori?.length) n += f.altKategori.length;
   if (f.marka?.length) n += f.marka.length;
-  if (f.il) n++;
-  if (f.ilce) n++;
+  if (f.il?.length) n += f.il.length;
+  if (f.ilce?.length) n += f.ilce.length;
   if (f.periyot?.length) n += f.periyot.length;
   if (f.minFiyat != null || f.maxFiyat != null) n++;
   if (f.minYil != null || f.maxYil != null) n++;
@@ -127,6 +138,8 @@ export function activeFilterCount(f: FilterState): number {
   if (f.durum?.length) n += f.durum.length;
   if (f.fotografli) n++;
   if (f.videolu) n++;
-  if (f.specs) n += Object.keys(f.specs).length;
+  if (f.specs) {
+    for (const v of Object.values(f.specs)) n += Array.isArray(v) ? v.length : 1;
+  }
   return n;
 }

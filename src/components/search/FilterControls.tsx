@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useFilterController } from "./filter-controller";
-import { CATEGORIES, getCategory, getFilterableSpecFields, operatorLabel, transportApplies } from "@/lib/categories";
-import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
+import { CATEGORIES, getCategory, operatorLabel } from "@/lib/categories";
+import { brandsForSelection } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
   CONDITIONS,
@@ -22,21 +22,40 @@ import {
 } from "@/lib/constants";
 import { Input, Select } from "@/components/ui/Field";
 import { VoiceSearchButton } from "./VoiceSearchButton";
+import { CheckRow } from "./CheckRow";
+import { MultiSelect, type MultiGroup } from "./MultiSelect";
+import {
+  clearAndPrune,
+  listOf,
+  operatorLabelCategory,
+  specFieldsForSelection,
+  toggleAndPrune,
+  transportAppliesToSelection,
+} from "./selection";
 import { cn } from "@/lib/cn";
 
 export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdvanced?: boolean } = {}) {
   const { sp, setParam, toggleInList, update } = useFilterController();
 
-  const kategori = sp.get("kategori") || "";
-  const altKategori = sp.get("altKategori") || "";
-  const category = getCategory(kategori);
-  const selectedBrands = (sp.get("marka") || "").split(",").filter(Boolean);
-  const il = sp.get("il") || "";
-  const ilceler = districtsOf(il);
+  const kategoriler = listOf(sp, "kategori");
+  const altKategoriler = listOf(sp, "altKategori");
+  const iller = listOf(sp, "il");
+  const selectedCategories = kategoriler.flatMap((slug) => getCategory(slug) ?? []);
+  const specFields = specFieldsForSelection(kategoriler, altKategoriler);
+  const operatorCategory = operatorLabelCategory(kategoriler);
 
   /** Virgüllü çoklu seçim parametresinde bir değer seçili mi. */
-  const has = (key: string, value: string) =>
-    (sp.get(key) || "").split(",").filter(Boolean).includes(value);
+  const has = (key: string, value: string) => listOf(sp, key).includes(value);
+
+  // Bağımlı parametreleri de budayan işlemler (kategori / alt kategori / il).
+  const toggleDep = (key: string) => (value: string) => update((p) => toggleAndPrune(p, key, value));
+  const clearDep = (key: string) => () => update((p) => clearAndPrune(p, key));
+
+  // Birden çok kategori seçiliyse alt kategoriler kategori başlıklarıyla gruplanır.
+  const subGroups: MultiGroup[] = selectedCategories.map((c) => ({
+    label: selectedCategories.length > 1 ? c.name : undefined,
+    options: c.subcategories.map((s) => ({ value: s.slug, label: s.name })),
+  }));
 
   return (
     <div className="divide-y divide-line">
@@ -52,93 +71,55 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
 
       {/* Kategori */}
       <Section title="Kategori">
-        <Select
-          value={kategori}
-          onChange={(e) =>
-            update((p) => {
-              const v = e.target.value;
-              if (v) p.set("kategori", v);
-              else p.delete("kategori");
-              p.delete("altKategori");
-              p.delete("marka");
-              [...p.keys()].filter((k) => k.startsWith("spec_")).forEach((k) => p.delete(k));
-            })
-          }
-        >
-          <option value="">Tüm Kategoriler</option>
-          {CATEGORIES.map((c) => (
-            <option key={c.slug} value={c.slug}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
+        <MultiSelect
+          groups={[{ options: CATEGORIES.map((c) => ({ value: c.slug, label: c.name })) }]}
+          selected={kategoriler}
+          onToggle={toggleDep("kategori")}
+          onClear={clearDep("kategori")}
+          placeholder="Tüm Kategoriler"
+          noun="kategori"
+        />
 
         {/* Alt kategori her zaman görünür; kategori seçilmeden kullanılamaz. */}
-        <Select
+        <MultiSelect
           className="mt-2"
-          value={altKategori}
-          disabled={!category}
-          onChange={(e) =>
-            update((p) => {
-              const v = e.target.value;
-              if (v) p.set("altKategori", v);
-              else p.delete("altKategori");
-              p.delete("marka");
-              // Yeni alt kategoride geçersiz kalan teknik filtreler (ör. lowbed'den
-              // tenteliye geçince "rampa tipi") görünmez ama sonucu daraltırdı.
-              const valid = new Set(getFilterableSpecFields(kategori, v || undefined).map((f) => `spec_${f.key}`));
-              [...p.keys()].filter((k) => k.startsWith("spec_") && !valid.has(k)).forEach((k) => p.delete(k));
-            })
-          }
-        >
-          <option value="">{category ? "Tüm Alt Kategoriler" : "Önce kategori seçin"}</option>
-          {(category?.subcategories ?? []).map((s) => (
-            <option key={s.slug} value={s.slug}>
-              {s.name}
-            </option>
-          ))}
-        </Select>
-        {!category && (
+          groups={subGroups}
+          selected={altKategoriler}
+          onToggle={toggleDep("altKategori")}
+          onClear={clearDep("altKategori")}
+          placeholder={kategoriler.length ? "Tüm Alt Kategoriler" : "Önce kategori seçin"}
+          noun="alt kategori"
+          disabled={kategoriler.length === 0}
+        />
+        {kategoriler.length === 0 && (
           <p className="mt-1 text-xs text-faint">
             Alt kategori için önce bir kategori seçmelisiniz.
           </p>
         )}
       </Section>
 
-      {/* Konum — il ve ilçe birlikte görünür */}
+      {/* Konum — il çoklu; ilçe yalnız TEK il seçiliyken (ilçe adları iller arasında tekrar eder) */}
       <Section title="Konum">
-        <Select
-          value={il}
-          onChange={(e) =>
-            update((p) => {
-              const v = e.target.value;
-              if (v) p.set("il", v);
-              else p.delete("il");
-              p.delete("ilce");
-            })
-          }
-        >
-          <option value="">Tüm Türkiye</option>
-          {PROVINCE_NAMES.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </Select>
-        <Select
+        <MultiSelect
+          groups={[{ options: PROVINCE_NAMES.map((p) => ({ value: p, label: p })) }]}
+          selected={iller}
+          onToggle={toggleDep("il")}
+          onClear={clearDep("il")}
+          placeholder="Tüm Türkiye"
+          noun="il"
+        />
+        <MultiSelect
           className="mt-2"
-          value={sp.get("ilce") || ""}
-          disabled={!il || ilceler.length === 0}
-          onChange={(e) => setParam("ilce", e.target.value)}
-        >
-          <option value="">{il ? "Tüm İlçeler" : "Önce il seçin"}</option>
-          {ilceler.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </Select>
-        {!il && <p className="mt-1 text-xs text-faint">İlçe için önce bir il seçmelisiniz.</p>}
+          groups={[{ options: (iller.length === 1 ? districtsOf(iller[0]) : []).map((d) => ({ value: d, label: d })) }]}
+          selected={listOf(sp, "ilce")}
+          onToggle={(v) => toggleInList("ilce", v)}
+          onClear={() => setParam("ilce", "")}
+          placeholder={iller.length === 1 ? "Tüm İlçeler" : iller.length > 1 ? "Tek il seçin" : "Önce il seçin"}
+          noun="ilçe"
+          disabled={iller.length !== 1}
+        />
+        {iller.length === 0 && <p className="mt-1 text-xs text-faint">İlçe için önce bir il seçmelisiniz.</p>}
+        {iller.length > 1 && <p className="mt-1 text-xs text-faint">İlçe seçmek için yalnız bir il seçin.</p>}
       </Section>
 
       {/* Fiyatlandırma */}
@@ -173,11 +154,11 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
       </Section>
 
       {/* Operatör (tırda "Şoför") */}
-      <Section title={category?.operatorLabels ? "Şoför" : "Operatör"}>
+      <Section title={operatorCategory ? "Şoför" : "Operatör"}>
         {OPERATOR_FILTERS.map((o) => (
           <CheckRow
             key={o}
-            label={category?.operatorLabels ? operatorLabel(category.slug, o === "operatorlu") : OPERATOR_LABELS[o]}
+            label={operatorCategory ? operatorLabel(operatorCategory, o === "operatorlu") : OPERATOR_LABELS[o]}
             checked={has("operator", o)}
             onChange={() => toggleInList("operator", o)}
           />
@@ -186,22 +167,19 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
 
       {/* Marka — seçilen alt kategoriye göre */}
       <Section title="Marka">
-        {category && !altKategori && (
+        {kategoriler.length > 0 && altKategoriler.length === 0 && (
           <p className="mb-2 -mt-1 text-xs text-faint">
             Markaları daraltmak için alt kategori seçin.
           </p>
         )}
-        <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
-          {brandsForSubcategory(kategori, altKategori).map((brand) => (
-            <CheckRow
-              key={brand}
-              label={brand}
-              checked={selectedBrands.includes(brand)}
-              onChange={() => toggleInList("marka", brand)}
-              badge={isTurkishBrand(brand) ? "Yerli" : undefined}
-            />
-          ))}
-        </div>
+        <MultiSelect
+          groups={[{ options: brandsForSelection(kategoriler, altKategoriler).map((b) => ({ value: b, label: b })) }]}
+          selected={listOf(sp, "marka")}
+          onToggle={(b) => toggleInList("marka", b)}
+          onClear={() => setParam("marka", "")}
+          placeholder="Tüm Markalar"
+          noun="marka"
+        />
       </Section>
 
       {/* Medya */}
@@ -218,39 +196,45 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
         />
       </Section>
 
-      {/* Kategoriye özel teknik filtreler */}
-      {category && getFilterableSpecFields(kategori, altKategori).length > 0 && (
+      {/* Kategoriye özel teknik filtreler — yalnız tek kategori seçiliyken */}
+      {specFields.length > 0 && (
         <Section title="Teknik Özellikler" collapsible={collapsibleAdvanced}>
           <div className="space-y-2">
-            {getFilterableSpecFields(kategori, altKategori).map((field) => (
+            {specFields.map((field) => (
               <div key={field.key}>
                 <label className="mb-1 block text-xs text-muted">
                   {field.label}
                   {field.unit ? ` (${field.unit})` : ""}
                   {field.type === "number" ? " — en az" : ""}
                 </label>
-                <Select
-                  value={String(sp.get(`spec_${field.key}`) || "")}
-                  onChange={(e) => setParam(`spec_${field.key}`, e.target.value)}
-                >
-                  <option value="">Seçiniz</option>
-                  {field.type === "number" ? (
-                    (field.steps ?? []).map((s) => (
-                      <option key={s} value={s}>
-                        {s}+ {field.unit}
-                      </option>
-                    ))
-                  ) : field.type === "boolean" ? (
-                    // jsonb'deki true, `specs->>key = 'true'` ile eşleşir.
-                    <option value="true">Var</option>
-                  ) : (
-                    (field.options ?? []).map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))
-                  )}
-                </Select>
+                {field.type === "number" || field.type === "boolean" ? (
+                  <Select
+                    value={String(sp.get(`spec_${field.key}`) || "")}
+                    onChange={(e) => setParam(`spec_${field.key}`, e.target.value)}
+                  >
+                    <option value="">Seçiniz</option>
+                    {field.type === "number" ? (
+                      (field.steps ?? []).map((s) => (
+                        <option key={s} value={s}>
+                          {s}+ {field.unit}
+                        </option>
+                      ))
+                    ) : (
+                      // jsonb'deki true, `specs->>key = 'true'` ile eşleşir.
+                      <option value="true">Var</option>
+                    )}
+                  </Select>
+                ) : (
+                  // Seçenekli alan: çoklu seçim (herhangi biri eşleşirse).
+                  <MultiSelect
+                    groups={[{ options: (field.options ?? []).map((o) => ({ value: o, label: o })) }]}
+                    selected={listOf(sp, `spec_${field.key}`)}
+                    onToggle={(v) => toggleInList(`spec_${field.key}`, v)}
+                    onClear={() => setParam(`spec_${field.key}`, "")}
+                    placeholder="Tümü"
+                    noun="seçenek"
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -266,7 +250,7 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
       </Section>
 
       {/* Nakliye — tırın kendisi nakliye aracı olduğu için orada gizli */}
-      {transportApplies(kategori) && (
+      {transportAppliesToSelection(kategoriler) && (
         <Section title="Nakliye" collapsible={collapsibleAdvanced}>
           {TRANSPORT_FILTERS.map((t) => (
             <CheckRow
@@ -353,61 +337,6 @@ function Section({
       </button>
       {open && <div className="mt-2.5">{children}</div>}
     </div>
-  );
-}
-
-function CheckRow({
-  label,
-  checked,
-  onChange,
-  className,
-  badge,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-  className?: string;
-  badge?: React.ReactNode;
-}) {
-  return (
-    <label
-      className={cn(
-        "relative flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1.5 text-sm text-muted hover:text-fg",
-        className,
-      )}
-    >
-      {/*
-        Girdi görünmez ama satırın TAMAMINI kaplar ve akışta yerinde durur.
-        Eskiden `sr-only` idi: position:absolute + 1x1px olduğu için tıklamayla
-        odaklandığında tarayıcı bu minik kutuyu görünür kılmak adına filtre
-        panelini (overflow-y-auto) binlerce piksel kaydırıyordu — kullanıcı
-        kutucuğu işaretler işaretlemez panel gözden kayboluyordu.
-      */}
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        className="peer absolute inset-0 cursor-pointer opacity-0"
-      />
-      <span
-        className={cn(
-          "grid h-[18px] w-[18px] shrink-0 place-items-center rounded border peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-surface",
-          checked ? "border-accent bg-accent text-accent-fg" : "border-line-strong",
-        )}
-      >
-        {checked && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        )}
-      </span>
-      <span>{label}</span>
-      {badge && (
-        <span className="ml-auto rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
-          {badge}
-        </span>
-      )}
-    </label>
   );
 }
 

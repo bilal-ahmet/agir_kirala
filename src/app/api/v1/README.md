@@ -95,6 +95,12 @@ Sayfa tabanlı, 12 ilan/sayfa (`?sayfa=N`). Filtre parametre adları web ile
 birebir aynıdır (`kategori`, `marka`, `il`, `spec_<key>`, …) çünkü aynı
 `parseFilters` kullanılır.
 
+Çoklu seçim: `kategori`, `altKategori`, `il`, `ilce`, `marka` ve metin tipli
+`spec_<key>` virgülle ayrılmış birden çok değer alır (`?il=İstanbul,Kocaeli`).
+Tek değer eskisi gibi çalışır. Kategori ile alt kategori hiyerarşik VEYA ile
+birleşir: `?kategori=hafriyat,vinc&altKategori=paletli-ekskavator` → hafriyatta
+yalnız paletli ekskavatör + vinçlerin tamamı.
+
 Bilinçli taviz: sonsuz kaydırma sırasında yeni ilan eklenirse nadiren tekrar/
 atlama olabilir. Yedi sıralama anahtarını cursor'a uyarlamak orantısız iş olurdu.
 

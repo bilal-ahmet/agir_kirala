@@ -1,7 +1,7 @@
 "use client";
 
 import { useFilters } from "./use-filters";
-import { getCategory, getSubCategoryName, operatorLabel } from "@/lib/categories";
+import { getCategory, operatorLabel } from "@/lib/categories";
 import {
   CONDITION_LABELS,
   FUEL_LABELS,
@@ -20,6 +20,7 @@ import type {
 } from "@/lib/types";
 import { formatNumber } from "@/lib/format";
 import { XIcon } from "@/components/ui/icons";
+import { listOf, operatorLabelCategory, specFieldsForSelection, toggleAndPrune } from "./selection";
 
 interface Chip {
   label: string;
@@ -28,35 +29,32 @@ interface Chip {
 
 export function ActiveFilterChips() {
   const { sp, setParam, toggleInList, update, clearAll } = useFilters();
-  const kategori = sp.get("kategori") || "";
-  const category = getCategory(kategori);
+  const kategoriler = listOf(sp, "kategori");
+  const altKategoriler = listOf(sp, "altKategori");
+  const operatorCategory = operatorLabelCategory(kategoriler);
   const chips: Chip[] = [];
 
   /** Virgüllü çoklu seçim parametresi → değer başına bir çip. */
-  const listChips = (key: string, label: (v: string) => string) => {
-    (sp.get(key) || "")
-      .split(",")
-      .filter(Boolean)
-      .forEach((v) => chips.push({ label: label(v), onRemove: () => toggleInList(key, v) }));
+  const listChips = (key: string, label: (v: string) => string, dependents = false) => {
+    listOf(sp, key).forEach((v) =>
+      chips.push({
+        label: label(v),
+        // Kategori/alt kategori/il kaldırılınca altındaki anlamsız seçimler de budanır.
+        onRemove: () => (dependents ? update((p) => toggleAndPrune(p, key, v)) : toggleInList(key, v)),
+      }),
+    );
   };
 
   if (sp.get("q")) chips.push({ label: `"${sp.get("q")}"`, onRemove: () => setParam("q", "") });
 
-  if (kategori && category) {
-    chips.push({ label: category.name, onRemove: () => update((p) => {
-      p.delete("kategori");
-      p.delete("altKategori");
-      [...p.keys()].filter((k) => k.startsWith("spec_")).forEach((k) => p.delete(k));
-    }) });
-  }
-
-  const alt = sp.get("altKategori");
-  if (alt && category) chips.push({ label: getSubCategoryName(kategori, alt), onRemove: () => setParam("altKategori", "") });
+  listChips("kategori", (v) => getCategory(v)?.name ?? v, true);
+  const subName = (slug: string) =>
+    kategoriler.flatMap((c) => getCategory(c)?.subcategories ?? []).find((s) => s.slug === slug)?.name ?? slug;
+  listChips("altKategori", subName, true);
 
   listChips("marka", (b) => b);
-
-  if (sp.get("il")) chips.push({ label: sp.get("il")!, onRemove: () => update((p) => { p.delete("il"); p.delete("ilce"); }) });
-  if (sp.get("ilce")) chips.push({ label: sp.get("ilce")!, onRemove: () => setParam("ilce", "") });
+  listChips("il", (v) => v, true);
+  listChips("ilce", (v) => v);
 
   listChips("periyot", (v) => PERIOD_LABELS[v as RentalPeriod] ?? v);
 
@@ -74,8 +72,8 @@ export function ActiveFilterChips() {
   }
 
   listChips("operator", (v) =>
-    category?.operatorLabels
-      ? operatorLabel(category.slug, v === "operatorlu")
+    operatorCategory
+      ? operatorLabel(operatorCategory, v === "operatorlu")
       : (OPERATOR_LABELS[v as OperatorFilter] ?? v),
   );
   listChips("durum", (v) => CONDITION_LABELS[v as ListingCondition] ?? v);
@@ -86,19 +84,17 @@ export function ActiveFilterChips() {
   if (sp.get("fotografli") === "1") chips.push({ label: "Fotoğraflı", onRemove: () => setParam("fotografli", "") });
   if (sp.get("videolu") === "1") chips.push({ label: "Videolu", onRemove: () => setParam("videolu", "") });
 
-  // Dinamik teknik özellik çipleri
-  if (category) {
-    for (const field of category.specFields) {
-      const val = sp.get(`spec_${field.key}`);
-      if (val) {
-        const suffix =
-          field.type === "number"
-            ? `${val}+ ${field.unit ?? ""}`.trim()
-            : field.type === "boolean"
-              ? "Var"
-              : val;
-        chips.push({ label: `${field.label}: ${suffix}`, onRemove: () => setParam(`spec_${field.key}`, "") });
-      }
+  // Dinamik teknik özellik çipleri (seçenekli alanlarda değer başına bir çip)
+  for (const field of specFieldsForSelection(kategoriler, altKategoriler)) {
+    const key = `spec_${field.key}`;
+    const val = sp.get(key);
+    if (!val) continue;
+    if (field.type === "number") {
+      chips.push({ label: `${field.label}: ${`${val}+ ${field.unit ?? ""}`.trim()}`, onRemove: () => setParam(key, "") });
+    } else if (field.type === "boolean") {
+      chips.push({ label: `${field.label}: Var`, onRemove: () => setParam(key, "") });
+    } else {
+      listChips(key, (v) => `${field.label}: ${v}`);
     }
   }
 

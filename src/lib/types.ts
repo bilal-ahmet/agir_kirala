@@ -212,11 +212,12 @@ export interface Conversation {
  */
 export interface FilterState {
   q?: string;
-  kategori?: string;
-  altKategori?: string;
+  /** Kategori ve alt kategori hiyerarşik VEYA ile birleşir (bkz. buildConditions). */
+  kategori?: string[];
+  altKategori?: string[];
   marka?: string[];
-  il?: string;
-  ilce?: string;
+  il?: string[];
+  ilce?: string[];
   periyot?: RentalPeriod[];
   minFiyat?: number;
   maxFiyat?: number;
@@ -231,8 +232,11 @@ export interface FilterState {
   fotografli?: boolean;
   /** Yalnızca videosu olan ilanlar */
   videolu?: boolean;
-  /** Dinamik teknik filtreler: specKey → min değer (number) veya tam eşleşme (string) */
-  specs?: Record<string, number | string>;
+  /**
+   * Dinamik teknik filtreler: specKey → min değer (number) ya da kabul edilen
+   * seçenekler (string[]; herhangi biri eşleşirse yeter).
+   */
+  specs?: Record<string, number | string[]>;
   sirala?: SortKey;
   sayfa?: number;
 }

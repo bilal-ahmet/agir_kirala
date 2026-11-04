@@ -29,6 +29,27 @@ import type {
 } from "../../types";
 import { toListing } from "./mappers";
 import { haulingPlan } from "../../hauling";
+import { getCategory } from "../../categories";
+
+/**
+ * Kategori + alt kategori koşulu — hiyerarşik VEYA. Her seçili kategoride, o
+ * kategoriye ait seçili alt kategori varsa yalnız onlar, yoksa kategorinin
+ * tamamı: "Hafriyat › Ekskavatör" + "Vinçler (tümü)". Alt kategori slug'ları
+ * kategoriler arasında tekil olduğu için eşleme belirsiz değildir.
+ */
+function categoryCondition(cats: string[], subs: string[]): SQL | undefined {
+  if (cats.length === 0) {
+    return subs.length ? inArray(listings.subCategorySlug, subs) : undefined;
+  }
+  const parts = cats.map((cat) => {
+    const own = new Set(getCategory(cat)?.subcategories.map((s) => s.slug) ?? []);
+    const picked = subs.filter((s) => own.has(s));
+    return picked.length
+      ? and(eq(listings.categorySlug, cat), inArray(listings.subCategorySlug, picked))!
+      : eq(listings.categorySlug, cat);
+  });
+  return parts.length === 1 ? parts[0] : or(...parts);
+}
 
 /**
  * İlgili fiyat (₺) SQL ifadesi.
@@ -78,11 +99,11 @@ function buildConditions(f: FilterState): SQL[] {
       );
     }
   }
-  if (f.kategori) c.push(eq(listings.categorySlug, f.kategori));
-  if (f.altKategori) c.push(eq(listings.subCategorySlug, f.altKategori));
+  const cat = categoryCondition(f.kategori ?? [], f.altKategori ?? []);
+  if (cat) c.push(cat);
   if (f.marka?.length) c.push(inArray(listings.brand, f.marka));
-  if (f.il) c.push(eq(listings.city, f.il));
-  if (f.ilce) c.push(eq(listings.district, f.ilce));
+  if (f.il?.length) c.push(inArray(listings.city, f.il));
+  if (f.ilce?.length) c.push(inArray(listings.district, f.ilce));
   // Seçilen periyotlardan EN AZ BİRİNİ sunan ilanlar.
   // `?|` operatörü yerine fonksiyon formu (sürücünün `?` placeholder'ıyla çakışmasın).
   // Dizi elemanları TEK TEK parametrelenir; drizzle bir JS dizisini tek parametreye
@@ -135,8 +156,10 @@ function buildConditions(f: FilterState): SQL[] {
     for (const [key, cond] of Object.entries(f.specs)) {
       if (typeof cond === "number") {
         c.push(sql`(${listings.specs}->>${key})::numeric >= ${cond}`);
-      } else {
-        c.push(sql`${listings.specs}->>${key} = ${cond}`);
+      } else if (cond.length) {
+        // Öğeler TEK TEK parametrelenir (yukarıdaki jsonb_exists_any notu).
+        const items = cond.map((v) => sql`${v}`);
+        c.push(sql`${listings.specs}->>${key} in (${sql.join(items, sql`, `)})`);
       }
     }
   }

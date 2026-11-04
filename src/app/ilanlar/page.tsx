@@ -41,10 +41,12 @@ export default async function IlanlarPage({
 }) {
   const params = await searchParams;
   const filters = parseFilters(params);
-  const category = getCategory(filters.kategori);
+  const categories = (filters.kategori ?? []).flatMap((slug) => getCategory(slug) ?? []);
+  // Breadcrumb yalnız tek kategoride anlamlı; çoklu seçimde başlık adları birleştirir.
+  const category = categories.length === 1 ? categories[0] : undefined;
 
-  const title = category
-    ? `${category.name} Kiralama`
+  const title = categories.length
+    ? `${categories.map((c) => c.name).join(", ")} Kiralama`
     : filters.q
       ? `"${filters.q}" için sonuçlar`
       : "Tüm İlanlar";
