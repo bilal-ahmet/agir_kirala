@@ -2,15 +2,14 @@
 //
 // Filtre paneli ve ilan-ekleme formu, SEÇİLEN ALT KATEGORİYE göre marka listesini
 // buradan alır (brandsForSubcategory). Her liste o makine tipini gerçekten üreten
-// markalardan oluşur; yerli (Türk) markalar TURKISH_BRANDS kümesinde işaretlidir ve
-// listede başa alınır (UI "Yerli" rozeti için isTurkishBrand kullanır).
-//
-// Diziler "yerli önce, sonra yaygınlık sırası" mantığıyla elle düzenlenmiştir.
+// markalardan oluşur. Kullanıcıya her zaman Türkçe alfabetik sırayla sunulur
+// (orderBrands); kaynak dizilerin sırası önemsizdir. Yerli (Türk) markalar
+// TURKISH_BRANDS kümesinde veri olarak tutulur (sesli arama, testler).
 
 import { getCategory } from "./categories";
 import { TRUCK_BRANDS, TURKISH_TRAILER_BRANDS } from "./truck-brands";
 
-/** Yerli (Türk) üretici markalar — UI'da "Yerli" rozeti ve sıralama için. */
+/** Yerli (Türk) üretici markalar — veri amaçlı (UI'da rozet/sıralama YOK). */
 export const TURKISH_BRANDS = new Set<string>([
   // İş makinesi
   "Hidromek", "Çukurova", "MST",
@@ -382,18 +381,13 @@ export function isTurkishBrand(brand: string): boolean {
   return TURKISH_BRANDS.has(brand);
 }
 
-/** Yerli markaları başa alır, geri kalanların göreli sırasını korur. */
+/** Türkçe alfabetik sıra (Ç, Ö, Ş doğru yerde); tekrarları atar. */
 function orderBrands(list: string[]): string[] {
-  const turkish: string[] = [];
-  const foreign: string[] = [];
-  for (const b of list) (TURKISH_BRANDS.has(b) ? turkish : foreign).push(b);
-  return [...turkish, ...foreign];
+  return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b, "tr"));
 }
 
 /** Tüm markaların tekil birleşimi (kategori/alt kategori seçilmediğinde). */
-export const ALL_BRANDS = orderBrands(
-  Array.from(new Set(Object.values(SUBCATEGORY_BRANDS).flat())),
-);
+export const ALL_BRANDS = orderBrands(Object.values(SUBCATEGORY_BRANDS).flat());
 
 /**
  * Seçilen alt kategoriye göre marka listesini döndürür.
@@ -425,6 +419,27 @@ export function brandsForSubcategory(
     }
   }
   return ALL_BRANDS;
+}
+
+/**
+ * Çoklu seçim için marka listesi: her seçili kategoride, o kategoriye ait seçili
+ * alt kategori varsa yalnız onların markaları, yoksa kategorinin tüm markaları.
+ * Hiç kategori yoksa seçili alt kategorilerin (ya da tüm) markaları.
+ */
+export function brandsForSelection(categorySlugs: string[], subSlugs: string[]): string[] {
+  if (categorySlugs.length === 0) {
+    const subs = subSlugs.filter((s) => SUBCATEGORY_BRANDS[s]);
+    return subs.length ? orderBrands(subs.flatMap((s) => SUBCATEGORY_BRANDS[s])) : ALL_BRANDS;
+  }
+  const out: string[] = [];
+  for (const slug of categorySlugs) {
+    const cat = getCategory(slug);
+    if (!cat) continue;
+    const own = cat.subcategories.map((s) => s.slug);
+    const picked = subSlugs.filter((s) => own.includes(s));
+    for (const s of picked.length ? picked : own) out.push(...(SUBCATEGORY_BRANDS[s] ?? []));
+  }
+  return out.length ? orderBrands(out) : ALL_BRANDS;
 }
 
 /**

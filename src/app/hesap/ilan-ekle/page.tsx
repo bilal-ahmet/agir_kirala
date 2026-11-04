@@ -11,7 +11,7 @@ import type { CreateListingInput } from "@/lib/core/schemas";
 import { uploadListingMedia } from "@/lib/upload-client";
 import { CATEGORIES, getCategory, operatorLabel, specFieldsFor, transportApplies } from "@/lib/categories";
 import { publishPriceError } from "@/lib/pricing";
-import { brandsForSubcategory, isTurkishBrand } from "@/lib/brands";
+import { brandsForSubcategory } from "@/lib/brands";
 import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
 import {
   ALLOWED_VIDEO_TYPES,
@@ -497,7 +497,7 @@ export default function IlanEklePage() {
                 <Select value={form.brand} onChange={(e) => set({ brand: e.target.value })}>
                   <option value="">Seçin</option>
                   {brandsForSubcategory(form.categorySlug, form.subCategorySlug).map((b) => (
-                    <option key={b} value={b}>{isTurkishBrand(b) ? `${b} (Yerli)` : b}</option>
+                    <option key={b} value={b}>{b}</option>
                   ))}
                 </Select>
               </Field>

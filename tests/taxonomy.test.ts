@@ -92,12 +92,11 @@ describe("tır markaları", () => {
     expect(SUBCATEGORY_BRANDS.cekici).toEqual([...TRUCK_BRANDS]);
   });
 
-  it("dorseli tiplerde önce çekici, sonra dorse markaları; yerliler başta", () => {
+  it("dorseli tiplerde çekici ve dorse markaları; Türkçe alfabetik sıralı", () => {
     const lowbed = brandsForSubcategory("tir", "lowbed");
     expect(lowbed).toEqual(expect.arrayContaining(["Mercedes-Benz", "Nooteboom", "Goldhofer", "Tırsan", "Gürleşenyıl"]));
-    // orderBrands yerlileri başa alır
-    const firstForeign = lowbed.findIndex((b) => !isTurkishBrand(b));
-    expect(lowbed.slice(firstForeign).some(isTurkishBrand)).toBe(false);
+    expect(lowbed).toEqual([...lowbed].sort((a, b) => a.localeCompare(b, "tr")));
+    expect(new Set(lowbed).size).toBe(lowbed.length);
   });
 
   it("dorse markaları tüm marka listesinde ve dorse markası seçeneğinde", () => {
@@ -108,7 +107,7 @@ describe("tır markaları", () => {
     expect(field.options).toEqual(expect.arrayContaining([...TRAILER_BRANDS, "Diğer"]));
   });
 
-  it("yerli dorse üreticileri Yerli rozeti alır", () => {
+  it("yerli dorse üreticileri yerli olarak işaretli", () => {
     for (const b of ["Tırsan", "Özgül", "Nursan", "Gürleşenyıl", "Koluman"]) expect(isTurkishBrand(b), b).toBe(true);
   });
 });
