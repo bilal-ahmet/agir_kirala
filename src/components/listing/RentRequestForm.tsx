@@ -108,7 +108,7 @@ export function RentRequestForm({ listing }: { listing: Listing }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <p className="rounded-md border border-info/30 bg-info-soft px-3 py-2 text-xs text-fg">
-        Hiçbir alanın doldurulması zorunlu değildir. Tarih belirtmeden de satıcıyla
+        Tarih belirtmeden satıcıyla
         iletişime geçebilirsiniz; tarih seçerseniz tahmini tutar hesaplanır.
       </p>
       <div className="grid grid-cols-2 gap-3">
