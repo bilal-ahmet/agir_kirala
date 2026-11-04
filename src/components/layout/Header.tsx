@@ -92,11 +92,11 @@ export function Header() {
             )}
           </Link>
 
-          <Link href="/ilanlar" className={buttonClasses("accent", "sm", "hidden sm:inline-flex")}>
+          <Link href="/ilanlar" className={buttonClasses("accent", "sm", "max-sm:hidden")}>
             <SearchIcon size={16} /> İlan Ara
           </Link>
 
-          <Link href="/hesap/ilan-ekle" className={buttonClasses("accent", "sm", "hidden sm:inline-flex")}>
+          <Link href="/hesap/ilan-ekle" className={buttonClasses("accent", "sm", "max-sm:hidden")}>
             <PlusIcon size={16} /> İlan Ver
           </Link>
 
@@ -138,7 +138,7 @@ export function Header() {
               )}
             </div>
           ) : (
-            <Link href="/giris" className={buttonClasses("outline", "sm", "hidden lg:inline-flex")}>
+            <Link href="/giris" className={buttonClasses("outline", "sm", "max-lg:hidden")}>
               Giriş Yap
             </Link>
           )}
