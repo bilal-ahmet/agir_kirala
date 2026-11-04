@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { XIcon } from "./icons";
 
@@ -33,7 +34,14 @@ export function Sheet({ open, onClose, title, children, footer, side = "right" }
       ? "right-0 top-0 h-full w-full max-w-md"
       : "inset-x-0 bottom-0 max-h-[88vh] rounded-t-2xl";
 
-  return (
+  /*
+    Portal ile <body>'ye render edilir. Sheet sticky header'ın İÇİNDE kullanılıyor
+    (MobileMenu) ve header'daki backdrop-blur (backdrop-filter) fixed konumlu
+    torunlar için yeni bir containing block oluşturuyor: `fixed inset-0` ekranı
+    değil 64px'lik header'ı kaplıyor, menü paneli kesik görünüyordu.
+    open yalnız kullanıcı etkileşimiyle true olur → sunucuda document'a dokunulmaz.
+  */
+  return createPortal(
     <div className="fixed inset-0 z-50 lg:hidden">
       <button
         aria-label="Kapat"
@@ -62,6 +70,7 @@ export function Sheet({ open, onClose, title, children, footer, side = "right" }
         <div className="flex-1 overflow-y-auto overscroll-contain p-4">{children}</div>
         {footer && <div className="border-t border-line p-4">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
