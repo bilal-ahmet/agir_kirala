@@ -11,8 +11,14 @@ interface RentalSelection {
   setEnd: (v: string) => void;
   setStartTime: (v: string) => void;
   setEndTime: (v: string) => void;
-  /** Takvimden gün seçimi: 1. tıklama başlangıç, 2. tıklama bitiş. */
+  /**
+   * Takvimden gün seçimi: 1. tıklama başlangıç, 2. tıklama bitiş (başlangıç
+   * gününe tekrar tıklamak tek günlük aralık yapar). Aralık tamamken yeni
+   * tıklama yeni aralık başlatır.
+   */
   pickDate: (iso: string) => void;
+  /** Tarih seçimini temizler (saatler korunur). */
+  clear: () => void;
 }
 
 const Ctx = createContext<RentalSelection | null>(null);
@@ -25,7 +31,7 @@ export function RentalSelectionProvider({ children }: { children: React.ReactNod
 
   const pickDate = useCallback(
     (iso: string) => {
-      if (!start || (start && end)) {
+      if (!start || end) {
         // Yeni aralık başlat
         setStart(iso);
         setEnd("");
@@ -33,12 +39,17 @@ export function RentalSelectionProvider({ children }: { children: React.ReactNod
         // Başlangıçtan önceye tıklandı → başlangıcı güncelle
         setStart(iso);
       } else {
-        // Bitişi belirle
+        // Bitişi belirle (aynı gün → tek günlük kiralama)
         setEnd(iso);
       }
     },
     [start, end],
   );
+
+  const clear = useCallback(() => {
+    setStart("");
+    setEnd("");
+  }, []);
 
   const value = useMemo<RentalSelection>(
     () => ({
@@ -51,8 +62,9 @@ export function RentalSelectionProvider({ children }: { children: React.ReactNod
       setStartTime,
       setEndTime,
       pickDate,
+      clear,
     }),
-    [start, end, startTime, endTime, pickDate],
+    [start, end, startTime, endTime, pickDate, clear],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
