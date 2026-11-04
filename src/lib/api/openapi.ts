@@ -343,7 +343,10 @@ const LISTING_QUERY_PARAMS: Json[] = [
   named("il", csv([], "İl adları, virgülle ayrılmış.")),
   named(
     "ilce",
-    csv([], "İlçe adları, virgülle ayrılmış. Web yalnız TEK il seçiliyken ilçe sunar (ilçe adları iller arasında tekrar eder)."),
+    csv(
+      [],
+      "İlçeler, virgülle ayrılmış. \"İl/İlçe\" (ör. \"Ankara/Çankaya\") ya da yalın ad. İlçe adları iller arasında tekrar ettiği için çoklu ilde kapsamlı biçim önerilir; yalın ad onu içeren her seçili ile uygulanır. İl ile hiyerarşik VEYA: ilçesi seçilmeyen ilin tamamı gelir.",
+    ),
   ),
   named(
     "periyot",

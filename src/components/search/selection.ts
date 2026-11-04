@@ -8,7 +8,7 @@
 import type { SpecField } from "@/lib/types";
 import { getCategory, getFilterableSpecFields, transportApplies } from "@/lib/categories";
 import { brandsForSelection } from "@/lib/brands";
-import { districtsOf } from "@/lib/locations";
+import { districtsByProvince, scopedDistrict } from "@/lib/locations";
 
 type Params = URLSearchParams | { get(key: string): string | null };
 
@@ -20,6 +20,16 @@ export function listOf(sp: Params, key: string): string[] {
 function setList(p: URLSearchParams, key: string, values: string[]) {
   if (values.length) p.set(key, values.join(","));
   else p.delete(key);
+}
+
+/**
+ * Seçili ilçeler, "İl/İlçe" biçiminde ve yalnız seçili illere ait olanlar.
+ * Yalın ad (sesli arama / eski link) onu içeren her seçili ile genişletilir;
+ * böylece kutucuklar doğru işaretlenir ve tek tek kaldırılabilir.
+ */
+export function selectedDistricts(sp: Params): string[] {
+  const byProvince = districtsByProvince(listOf(sp, "il"), listOf(sp, "ilce"));
+  return [...byProvince].flatMap(([il, ds]) => ds.map((d) => scopedDistrict(il, d)));
 }
 
 /**
@@ -61,10 +71,8 @@ export function pruneDependents(p: URLSearchParams) {
   const subs = listOf(p, "altKategori").filter((s) => ownSubs.has(s));
   setList(p, "altKategori", subs);
 
-  // İlçe: yalnız TEK il seçiliyken ve o ile ait olanlar.
-  const iller = listOf(p, "il");
-  const districts = iller.length === 1 ? new Set(districtsOf(iller[0])) : new Set<string>();
-  setList(p, "ilce", listOf(p, "ilce").filter((d) => districts.has(d)));
+  // İlçe: yalnız seçili illere ait olanlar, "İl/İlçe" biçimine normalleştirilmiş.
+  setList(p, "ilce", selectedDistricts(p));
 
   // Marka: yeni seçimin marka listesinde kalanlar.
   const brands = new Set(brandsForSelection(cats, subs));
@@ -83,6 +91,12 @@ export function toggleAndPrune(p: URLSearchParams, key: string, value: string) {
   const cur = listOf(p, key);
   setList(p, key, cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]);
   pruneDependents(p);
+}
+
+/** İlçe aç/kapat ("İl/İlçe"). Önce yalın adlar normalleştirilir ki kaldırma çalışsın. */
+export function toggleDistrict(p: URLSearchParams, scoped: string) {
+  const cur = selectedDistricts(p);
+  setList(p, "ilce", cur.includes(scoped) ? cur.filter((v) => v !== scoped) : [...cur, scoped]);
 }
 
 /** Parametreyi tamamen temizle, ardından bağımlıları buda. */

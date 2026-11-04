@@ -4,7 +4,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { pruneDependents, specFieldsForSelection, toggleAndPrune } from "@/components/search/selection";
+import {
+  pruneDependents,
+  selectedDistricts,
+  specFieldsForSelection,
+  toggleAndPrune,
+  toggleDistrict,
+} from "@/components/search/selection";
+import { districtsByProvince } from "@/lib/locations";
 import { brandsForSelection } from "@/lib/brands";
 import { getCategory } from "@/lib/categories";
 
@@ -40,17 +47,44 @@ describe("kategori / alt kategori", () => {
 });
 
 describe("il / ilçe", () => {
-  it("ikinci il eklenince ilçe silinir", () => {
+  it("ikinci il eklenince ilçe korunur ve İl/İlçe biçimine çevrilir", () => {
     const p = qs("il=İstanbul&ilce=Kadıköy");
-    toggleAndPrune(p, "il", "Kocaeli");
-    expect(p.get("il")).toBe("İstanbul,Kocaeli");
-    expect(p.has("ilce")).toBe(false);
+    toggleAndPrune(p, "il", "Ankara");
+    expect(p.get("il")).toBe("İstanbul,Ankara");
+    expect(p.get("ilce")).toBe("İstanbul/Kadıköy");
   });
 
-  it("tek ilde o ile ait ilçeler kalır", () => {
+  it("il kaldırılınca yalnız o ilin ilçeleri gider", () => {
+    const p = qs("il=İstanbul,Ankara&ilce=İstanbul/Kadıköy,Ankara/Çankaya");
+    toggleAndPrune(p, "il", "Ankara");
+    expect(p.get("ilce")).toBe("İstanbul/Kadıköy");
+  });
+
+  it("aynı adlı ilçe yalnız seçildiği ile uygulanır", () => {
+    // "Merkez" onlarca ilde var; kapsamlı değer belirsizliği çözer.
+    const byIl = districtsByProvince(["Adıyaman", "Ağrı"], ["Adıyaman/Merkez"]);
+    expect(byIl.get("Adıyaman")).toEqual(["Merkez"]);
+    expect(byIl.has("Ağrı")).toBe(false);
+  });
+
+  it("yalın ad (sesli arama / eski link) onu içeren her seçili ile gider", () => {
+    const byIl = districtsByProvince(["Adıyaman", "Ağrı", "İstanbul"], ["Merkez"]);
+    expect(byIl.get("Adıyaman")).toEqual(["Merkez"]);
+    expect(byIl.get("Ağrı")).toEqual(["Merkez"]);
+    expect(byIl.has("İstanbul")).toBe(false);
+  });
+
+  it("yalın ad normalleştirilip tek tek kaldırılabilir", () => {
     const p = qs("il=İstanbul&ilce=Kadıköy,Üsküdar");
-    pruneDependents(p);
-    expect(p.get("ilce")).toBe("Kadıköy,Üsküdar");
+    expect(selectedDistricts(p)).toEqual(["İstanbul/Kadıköy", "İstanbul/Üsküdar"]);
+    toggleDistrict(p, "İstanbul/Kadıköy");
+    expect(p.get("ilce")).toBe("İstanbul/Üsküdar");
+  });
+
+  it("il yoksa ilçe kalmaz", () => {
+    const p = qs("il=İstanbul&ilce=İstanbul/Kadıköy");
+    toggleAndPrune(p, "il", "İstanbul");
+    expect(p.has("ilce")).toBe(false);
   });
 });
 

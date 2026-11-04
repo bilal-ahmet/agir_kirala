@@ -20,6 +20,7 @@ import type {
 } from "@/lib/types";
 import { formatNumber } from "@/lib/format";
 import { XIcon } from "@/components/ui/icons";
+import { parseDistrict } from "@/lib/locations";
 import { listOf, operatorLabelCategory, specFieldsForSelection, toggleAndPrune } from "./selection";
 
 interface Chip {
@@ -54,7 +55,12 @@ export function ActiveFilterChips() {
 
   listChips("marka", (b) => b);
   listChips("il", (v) => v, true);
-  listChips("ilce", (v) => v);
+  // "İl/İlçe": birden çok il seçiliyken hangi ilin ilçesi olduğu da yazılır.
+  const multiProvince = listOf(sp, "il").length > 1;
+  listChips("ilce", (v) => {
+    const d = parseDistrict(v);
+    return d.il && multiProvince ? `${d.ilce} (${d.il})` : d.ilce;
+  });
 
   listChips("periyot", (v) => PERIOD_LABELS[v as RentalPeriod] ?? v);
 

@@ -97,3 +97,42 @@ export function districtsOf(province: string | undefined): string[] {
   if (!province) return [];
   return PROVINCES.find((p) => p.name === province)?.districts ?? [];
 }
+
+// ───────────────────────── çoklu il/ilçe seçimi ─────────────────────────
+//
+// İlçe adları iller arasında tekrar ediyor ("Merkez", "Kale", "Yenice"...).
+// Birden çok il seçiliyken ilçenin hangi ile ait olduğu belirsiz kalmasın diye
+// web ilçeyi "İl/İlçe" biçiminde yazar (`ilce=Ankara/Çankaya`). Yalın ad
+// ("Çankaya") geriye uyumluluk için kabul edilir: sesli arama, eski linkler
+// ve mobil API böyle gönderir; onu içeren HER seçili ile uygulanır.
+
+const DISTRICT_SEP = "/";
+
+/** "İl/İlçe" kapsamlı ilçe değeri. */
+export function scopedDistrict(province: string, district: string): string {
+  return `${province}${DISTRICT_SEP}${district}`;
+}
+
+/** "İl/İlçe" → { il, ilce }; yalın ad → { ilce }. */
+export function parseDistrict(value: string): { il?: string; ilce: string } {
+  const i = value.indexOf(DISTRICT_SEP);
+  return i < 0 ? { ilce: value } : { il: value.slice(0, i), ilce: value.slice(i + 1) };
+}
+
+/**
+ * İlçe seçimlerini seçili illere dağıtır: il → o ilde seçili ilçeler.
+ * Kapsamlı değer yalnız kendi iline (o il seçiliyse), yalın ad onu içeren
+ * her seçili ile gider; o ilde öyle bir ilçe yoksa atılır.
+ */
+export function districtsByProvince(provinces: string[], districts: string[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const il of provinces) {
+    const own = new Set(districtsOf(il));
+    const picked = districts
+      .map(parseDistrict)
+      .filter((d) => (d.il ? d.il === il : true) && own.has(d.ilce))
+      .map((d) => d.ilce);
+    if (picked.length) out.set(il, Array.from(new Set(picked)));
+  }
+  return out;
+}

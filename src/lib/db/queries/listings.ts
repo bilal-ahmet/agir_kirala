@@ -30,6 +30,7 @@ import type {
 import { toListing } from "./mappers";
 import { haulingPlan } from "../../hauling";
 import { getCategory } from "../../categories";
+import { districtsByProvince, parseDistrict } from "../../locations";
 
 /**
  * Kategori + alt kategori koşulu — hiyerarşik VEYA. Her seçili kategoride, o
@@ -72,6 +73,30 @@ function relevantPriceExpr(periods?: RentalPeriod[]): SQL {
   return sql`coalesce(${sql.join(parts, sql`, `)})::numeric`;
 }
 
+/**
+ * İl + ilçe koşulu — kategoriyle aynı hiyerarşik VEYA: her seçili ilde, o ile
+ * ait seçili ilçe varsa yalnız onlar, yoksa ilin tamamı. İlçe "İl/İlçe"
+ * (web) ya da yalın ad (eski link / sesli arama / mobil) olabilir.
+ */
+function locationCondition(provinces: string[], districts: string[]): SQL | undefined {
+  if (provinces.length === 0) {
+    if (districts.length === 0) return undefined;
+    // İl seçilmeden ilçe (yalnız API): kapsamlıysa il+ilçe, değilse ilçe adı.
+    const parts = districts.map(parseDistrict).map((d) =>
+      d.il ? and(eq(listings.city, d.il), eq(listings.district, d.ilce))! : eq(listings.district, d.ilce),
+    );
+    return parts.length === 1 ? parts[0] : or(...parts);
+  }
+  const byProvince = districtsByProvince(provinces, districts);
+  const parts = provinces.map((il) => {
+    const picked = byProvince.get(il);
+    return picked
+      ? and(eq(listings.city, il), inArray(listings.district, picked))!
+      : eq(listings.city, il);
+  });
+  return parts.length === 1 ? parts[0] : or(...parts);
+}
+
 /** Arama metnindeki en fazla bu kadar kelime koşula dönüşür. */
 const MAX_QUERY_WORDS = 6;
 
@@ -102,8 +127,8 @@ function buildConditions(f: FilterState): SQL[] {
   const cat = categoryCondition(f.kategori ?? [], f.altKategori ?? []);
   if (cat) c.push(cat);
   if (f.marka?.length) c.push(inArray(listings.brand, f.marka));
-  if (f.il?.length) c.push(inArray(listings.city, f.il));
-  if (f.ilce?.length) c.push(inArray(listings.district, f.ilce));
+  const loc = locationCondition(f.il ?? [], f.ilce ?? []);
+  if (loc) c.push(loc);
   // Seçilen periyotlardan EN AZ BİRİNİ sunan ilanlar.
   // `?|` operatörü yerine fonksiyon formu (sürücünün `?` placeholder'ıyla çakışmasın).
   // Dizi elemanları TEK TEK parametrelenir; drizzle bir JS dizisini tek parametreye

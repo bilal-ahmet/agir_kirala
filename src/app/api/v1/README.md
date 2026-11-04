@@ -99,7 +99,11 @@ birebir aynıdır (`kategori`, `marka`, `il`, `spec_<key>`, …) çünkü aynı
 `spec_<key>` virgülle ayrılmış birden çok değer alır (`?il=İstanbul,Kocaeli`).
 Tek değer eskisi gibi çalışır. Kategori ile alt kategori hiyerarşik VEYA ile
 birleşir: `?kategori=hafriyat,vinc&altKategori=paletli-ekskavator` → hafriyatta
-yalnız paletli ekskavatör + vinçlerin tamamı.
+yalnız paletli ekskavatör + vinçlerin tamamı. İl/ilçe de aynı mantıkla çalışır;
+ilçe adları iller arasında tekrar ettiği için ilçe `İl/İlçe` biçiminde de
+verilebilir: `?il=Ankara,İstanbul&ilce=Ankara/Çankaya` → Ankara'da yalnız
+Çankaya + İstanbul'un tamamı. Yalın ad (`ilce=Çankaya`) onu içeren her seçili
+ile uygulanır.
 
 Bilinçli taviz: sonsuz kaydırma sırasında yeni ilan eklenirse nadiren tekrar/
 atlama olabilir. Yedi sıralama anahtarını cursor'a uyarlamak orantısız iş olurdu.

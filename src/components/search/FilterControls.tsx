@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useFilterController } from "./filter-controller";
 import { CATEGORIES, getCategory, operatorLabel } from "@/lib/categories";
 import { brandsForSelection } from "@/lib/brands";
-import { PROVINCE_NAMES, districtsOf } from "@/lib/locations";
+import { PROVINCE_NAMES, districtsOf, scopedDistrict } from "@/lib/locations";
 import {
   CONDITIONS,
   CONDITION_LABELS,
@@ -28,8 +28,10 @@ import {
   clearAndPrune,
   listOf,
   operatorLabelCategory,
+  selectedDistricts,
   specFieldsForSelection,
   toggleAndPrune,
+  toggleDistrict,
   transportAppliesToSelection,
 } from "./selection";
 import { cn } from "@/lib/cn";
@@ -50,6 +52,13 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
   // Bağımlı parametreleri de budayan işlemler (kategori / alt kategori / il).
   const toggleDep = (key: string) => (value: string) => update((p) => toggleAndPrune(p, key, value));
   const clearDep = (key: string) => () => update((p) => clearAndPrune(p, key));
+
+  // Birden çok il seçiliyse ilçeler il başlıklarıyla gruplanır. Değer "İl/İlçe":
+  // ilçe adları iller arasında tekrar eder ("Merkez"), yalın ad belirsiz kalırdı.
+  const districtGroups: MultiGroup[] = iller.map((il) => ({
+    label: iller.length > 1 ? il : undefined,
+    options: districtsOf(il).map((d) => ({ value: scopedDistrict(il, d), label: d })),
+  }));
 
   // Birden çok kategori seçiliyse alt kategoriler kategori başlıklarıyla gruplanır.
   const subGroups: MultiGroup[] = selectedCategories.map((c) => ({
@@ -98,7 +107,7 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
         )}
       </Section>
 
-      {/* Konum — il çoklu; ilçe yalnız TEK il seçiliyken (ilçe adları iller arasında tekrar eder) */}
+      {/* Konum — il ve ilçe çoklu; ilçeler il başlıklarıyla gruplanır */}
       <Section title="Konum">
         <MultiSelect
           groups={[{ options: PROVINCE_NAMES.map((p) => ({ value: p, label: p })) }]}
@@ -110,16 +119,15 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
         />
         <MultiSelect
           className="mt-2"
-          groups={[{ options: (iller.length === 1 ? districtsOf(iller[0]) : []).map((d) => ({ value: d, label: d })) }]}
-          selected={listOf(sp, "ilce")}
-          onToggle={(v) => toggleInList("ilce", v)}
+          groups={districtGroups}
+          selected={selectedDistricts(sp)}
+          onToggle={(v) => update((p) => toggleDistrict(p, v))}
           onClear={() => setParam("ilce", "")}
-          placeholder={iller.length === 1 ? "Tüm İlçeler" : iller.length > 1 ? "Tek il seçin" : "Önce il seçin"}
+          placeholder={iller.length ? "Tüm İlçeler" : "Önce il seçin"}
           noun="ilçe"
-          disabled={iller.length !== 1}
+          disabled={iller.length === 0}
         />
         {iller.length === 0 && <p className="mt-1 text-xs text-faint">İlçe için önce bir il seçmelisiniz.</p>}
-        {iller.length > 1 && <p className="mt-1 text-xs text-faint">İlçe seçmek için yalnız bir il seçin.</p>}
       </Section>
 
       {/* Fiyatlandırma */}
