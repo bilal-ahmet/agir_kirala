@@ -30,7 +30,7 @@ export function MobileFilterBar() {
         )}
       </button>
       <SortSelect />
-      <VoiceSearchButton className="border border-line-strong" />
+      <VoiceSearchButton className="border border-line-strong" current={sp} />
 
       <Sheet
         open={open}

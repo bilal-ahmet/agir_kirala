@@ -74,7 +74,8 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
           <div className="min-w-0 flex-1">
             <TextParamInput keyName="q" placeholder="Marka, model veya ilan başlığı" />
           </div>
-          <VoiceSearchButton />
+          {/* Mevcut filtreler verilir: sesle düzenlenebilir ("Kocaeli'yi de ekle"). */}
+          <VoiceSearchButton current={sp} />
         </div>
       </Section>
 
@@ -181,7 +182,7 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
           </p>
         )}
         <MultiSelect
-          groups={[{ options: brandsForSelection(kategoriler, altKategoriler).map((b) => ({ value: b, label: b })) }]}
+          groups={[{ options: brandOptions(brandsForSelection(kategoriler, altKategoriler), listOf(sp, "marka")) }]}
           selected={listOf(sp, "marka")}
           onToggle={(b) => toggleInList("marka", b)}
           onClear={() => setParam("marka", "")}
@@ -296,6 +297,16 @@ export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdv
       </Section>
     </div>
   );
+}
+
+/**
+ * Marka seçenekleri: seçimin listesi + listede olmayan ama seçili markalar
+ * (ör. sesle "Scania forklift" dendiyse). Sesli arama söyleneni atmaz; seçili
+ * marka panelde de görünmeli ki kullanıcı kendisi kaldırabilsin.
+ */
+function brandOptions(list: string[], selected: string[]) {
+  const extra = selected.filter((b) => !list.includes(b));
+  return [...list, ...extra].map((b) => ({ value: b, label: b }));
 }
 
 function Section({

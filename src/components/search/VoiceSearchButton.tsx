@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { parseVoiceSearchAction } from "@/lib/actions/voice-search";
-import type { VoiceChip } from "@/lib/core/voice-search/types";
+import type { VoiceChip, VoiceParseResult } from "@/lib/core/voice-search/types";
 import { Button } from "@/components/ui/Button";
 import { ChevronRightIcon, MicIcon, XIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
@@ -83,6 +83,8 @@ function useSpeechSupported(optimistic: boolean): boolean {
 
 /** Örnek cümle — CTA ve dinleme paneli aynısını gösterir (mobilde kVoiceSearchExample). */
 export const VOICE_SEARCH_EXAMPLE = "İstanbul’da operatörlü JCB kepçe";
+/** Mevcut filtreler varken dinleme panelindeki ipucu: düzenleme de yapılabilir. */
+const REFINE_EXAMPLE = "“Kocaeli’yi de ekle”, “JCB’yi çıkar”, “en ucuza göre sırala”";
 
 /**
  * Konuşma bittikten sonra aramadan önce beklenen sessizlik.
@@ -117,10 +119,25 @@ interface State {
   phase: Phase;
   transcript: string;
   chips: VoiceChip[];
+  /** Düzenlemede gösterilen fark ("+ Kocaeli", "− JCB"). */
+  changes?: VoiceParseResult["changes"];
+  /** Yapay zekâ yedeği kullanıldıysa kullanıcıya belirtilir. */
+  ai?: boolean;
   error?: string;
 }
 
 const IDLE: State = { phase: "idle", transcript: "", chips: [] };
+
+/** Mevcut arama parametreleri (URLSearchParams ya da benzeri). */
+type CurrentParams = { toString(): string };
+
+function currentRecord(current: CurrentParams | undefined): Record<string, string> | undefined {
+  if (!current) return undefined;
+  const p = new URLSearchParams(current.toString());
+  p.delete("sayfa");
+  const rec = Object.fromEntries(p);
+  return Object.keys(rec).length ? rec : undefined;
+}
 
 /**
  * `icon`: arama alanlarının yanındaki küçük mikrofon.
@@ -129,7 +146,20 @@ const IDLE: State = { phase: "idle", transcript: "", chips: [] };
  */
 type Variant = "icon" | "cta";
 
-export function VoiceSearchButton({ className, variant = "icon" }: { className?: string; variant?: Variant }) {
+export function VoiceSearchButton({
+  className,
+  variant = "icon",
+  current,
+}: {
+  className?: string;
+  variant?: Variant;
+  /**
+   * Sonuç sayfasındaki mevcut filtreler. Verilirse cümle onları düzenleyebilir
+   * ("Kocaeli'yi de ekle", "JCB'yi çıkar"). Ana sayfa CTA'sı vermez: oradaki
+   * her cümle yeni aramadır.
+   */
+  current?: CurrentParams;
+}) {
   const supported = useSpeechSupported(variant === "cta");
   const router = useRouter();
   const [state, setState] = useState<State>(IDLE);
@@ -137,6 +167,12 @@ export function VoiceSearchButton({ className, variant = "icon" }: { className?:
   const transcriptRef = useRef("");
   const cancelledRef = useRef(false);
   const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refinable = currentRecord(current) !== undefined;
+  // Konuşma bittiğinde (render'dan bağımsız bir anda) güncel filtreler okunur.
+  const currentRef = useRef(current);
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
 
   const close = useCallback(() => {
     cancelledRef.current = true;
@@ -151,7 +187,7 @@ export function VoiceSearchButton({ className, variant = "icon" }: { className?:
       setState((s) => ({ ...s, phase: "parsing", transcript: text }));
       let res: Awaited<ReturnType<typeof parseVoiceSearchAction>>;
       try {
-        res = await parseVoiceSearchAction(text);
+        res = await parseVoiceSearchAction(text, currentRecord(currentRef.current));
       } catch {
         res = { error: "Bağlantı hatası. Tekrar deneyin." };
       }
@@ -160,22 +196,31 @@ export function VoiceSearchButton({ className, variant = "icon" }: { className?:
         setState((s) => ({ ...s, phase: "error", error: res.error }));
         return;
       }
-      const { params, chips } = res.result;
-      if (!Object.keys(params).length) {
+      const { params, chips, mode, changes, source } = res.result;
+      const changed = changes ? changes.added.length + changes.removed.length : 0;
+      // Düzenlemede boş küme geçerlidir ("filtreleri temizle"); yeni aramada
+      // ve hiçbir şey değişmeyen düzenlemede cümle anlaşılmamıştır.
+      if (mode === "new" ? !Object.keys(params).length : changed === 0) {
         setState((s) => ({
           ...s,
           phase: "error",
-          error: "Ne aradığınızı anlayamadım. Örneğin il, makine türü veya marka söyleyin.",
+          error:
+            mode === "new"
+              ? "Ne aradığınızı anlayamadım. Örneğin il, makine türü veya marka söyleyin."
+              : "Filtrelerde bir değişiklik olmadı. Örneğin “Kocaeli’yi de ekle” ya da “JCB’yi çıkar” deyin.",
         }));
         return;
       }
-      setState((s) => ({ ...s, phase: "done", chips }));
-      // Anlaşılanı kısa bir an göster, sonra sonuçlara geç. Yeni bir arama
-      // olduğu için mevcut filtreler korunmaz.
+      setState((s) => ({ ...s, phase: "done", chips, changes, ai: source === "llm" }));
+      // Anlaşılanı kısa bir an göster, sonra sonuçlara geç. Gösterilen parça
+      // arttıkça okumaya biraz daha süre tanınır. params her iki modda da tam
+      // kümedir: düzenlemede mevcut filtreler zaten içindedir.
+      const shown = mode === "refine" ? changed : chips.length;
+      const qs = new URLSearchParams(params).toString();
       navTimer.current = setTimeout(() => {
-        router.push(`/ilanlar?${new URLSearchParams(params)}`);
+        router.push(qs ? `/ilanlar?${qs}` : "/ilanlar");
         setState(IDLE);
-      }, 700);
+      }, Math.min(1200, 600 + shown * 100));
     },
     [router],
   );
@@ -343,30 +388,59 @@ export function VoiceSearchButton({ className, variant = "icon" }: { className?:
                 <p className="text-sm font-semibold text-fg">
                   {state.phase === "listening" && "Dinliyorum…"}
                   {state.phase === "parsing" && "Anlamaya çalışıyorum…"}
-                  {state.phase === "done" && "Aranıyor"}
+                  {state.phase === "done" && (state.changes ? "Filtreler güncelleniyor" : "Aranıyor")}
                   {state.phase === "error" && "Olmadı"}
                 </p>
                 {state.transcript ? (
                   <p className="mt-1 break-words text-sm text-muted">“{state.transcript}”</p>
                 ) : (
                   listening && (
-                    <p className="mt-1 text-sm text-faint">Örn. “{VOICE_SEARCH_EXAMPLE}”</p>
+                    <p className="mt-1 text-sm text-faint">
+                      {refinable ? `Yeni bir arama söyleyin ya da filtreleri düzenleyin: ${REFINE_EXAMPLE}` : `Örn. “${VOICE_SEARCH_EXAMPLE}”`}
+                    </p>
                   )
                 )}
                 {state.phase === "error" && state.error && (
                   <p className="mt-2 text-sm text-danger">{state.error}</p>
                 )}
-                {state.phase === "done" && state.chips.length > 0 && (
-                  <ul className="mt-2 flex flex-wrap gap-1.5">
-                    {state.chips.map((c) => (
-                      <li
-                        key={`${c.param}:${c.value}`}
-                        className="rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-xs text-fg"
-                      >
-                        {c.label}
-                      </li>
-                    ))}
-                  </ul>
+                {state.phase === "done" &&
+                  (state.changes ? (
+                    <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Filtre değişiklikleri">
+                      {state.changes.added.map((c) => (
+                        <li
+                          key={`+${c.param}:${c.value}`}
+                          className="rounded-full border border-accent/50 bg-accent/10 px-2.5 py-0.5 text-xs text-fg"
+                        >
+                          <span aria-label="eklendi">+ </span>
+                          {c.label}
+                        </li>
+                      ))}
+                      {state.changes.removed.map((c) => (
+                        <li
+                          key={`-${c.param}:${c.value}`}
+                          className="rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-xs text-muted line-through"
+                        >
+                          <span aria-label="çıkarıldı">− </span>
+                          {c.label}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    state.chips.length > 0 && (
+                      <ul className="mt-2 flex flex-wrap gap-1.5">
+                        {state.chips.map((c) => (
+                          <li
+                            key={`${c.param}:${c.value}`}
+                            className="rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-xs text-fg"
+                          >
+                            {c.label}
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ))}
+                {state.phase === "done" && state.ai && (
+                  <p className="mt-2 text-xs text-faint">Yapay zekâ ile yorumlandı.</p>
                 )}
               </div>
 
