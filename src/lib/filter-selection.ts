@@ -1,9 +1,12 @@
-// Çoklu seçimli filtrelerin birbirine bağımlılıkları (istemci tarafı).
+// Çoklu seçimli filtrelerin birbirine bağımlılıkları.
 //
 // Kategori / alt kategori / il / ilçe / marka / teknik özellik seçimleri
 // birbirini daraltır. Bir üst seçim değişince ALTINDA artık anlamsız kalan
 // değerler URL'den budanır; aksi halde görünmeyen bir filtre sonucu sessizce
 // daraltırdı (ör. kategoriden çıkarılan bir alt kategori).
+//
+// Saf modül: filtre paneli (istemci) ve sesli arama (sunucu) aynı kuralları
+// kullanır, böylece sesle kurulan bir arama panelde birebir aynı görünür.
 
 import type { SpecField } from "@/lib/types";
 import { getCategory, getFilterableSpecFields, transportApplies } from "@/lib/categories";

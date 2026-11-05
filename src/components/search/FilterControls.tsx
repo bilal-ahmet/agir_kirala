@@ -33,7 +33,7 @@ import {
   toggleAndPrune,
   toggleDistrict,
   transportAppliesToSelection,
-} from "./selection";
+} from "@/lib/filter-selection";
 import { cn } from "@/lib/cn";
 
 export function FilterControls({ collapsibleAdvanced = false }: { collapsibleAdvanced?: boolean } = {}) {

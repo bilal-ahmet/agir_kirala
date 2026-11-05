@@ -10,7 +10,7 @@ import {
   specFieldsForSelection,
   toggleAndPrune,
   toggleDistrict,
-} from "@/components/search/selection";
+} from "@/lib/filter-selection";
 import { districtsByProvince } from "@/lib/locations";
 import { brandsForSelection } from "@/lib/brands";
 import { getCategory } from "@/lib/categories";

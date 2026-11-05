@@ -21,7 +21,7 @@ import type {
 import { formatNumber } from "@/lib/format";
 import { XIcon } from "@/components/ui/icons";
 import { parseDistrict } from "@/lib/locations";
-import { listOf, operatorLabelCategory, specFieldsForSelection, toggleAndPrune } from "./selection";
+import { listOf, operatorLabelCategory, specFieldsForSelection, toggleAndPrune } from "@/lib/filter-selection";
 
 interface Chip {
   label: string;
