@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  clearAndPrune,
   pruneDependents,
   selectedDistricts,
   specFieldsForSelection,
@@ -43,6 +44,43 @@ describe("kategori / alt kategori", () => {
     const p = qs("kategori=hafriyat,forklift&marka=Hidromek,Toyota,Caterpillar");
     toggleAndPrune(p, "kategori", "forklift");
     expect(p.get("marka")?.split(",").sort()).toEqual(["Caterpillar", "Hidromek"]);
+  });
+
+  it("alt kategori değişince de marka budanır", () => {
+    const p = qs("kategori=forklift&marka=Scania");
+    toggleAndPrune(p, "altKategori", "dizel");
+    expect(p.has("marka")).toBe(false);
+  });
+});
+
+describe("marka yalnız kategori/alt kategori değişince budanır", () => {
+  it("il kaldırılınca listede olmayan marka korunur (\"Scania forklift\")", () => {
+    const p = qs("kategori=forklift&marka=Scania&il=İstanbul");
+    toggleAndPrune(p, "il", "İstanbul");
+    expect(p.get("marka")).toBe("Scania");
+    expect(p.has("il")).toBe(false);
+  });
+
+  it("il temizlenince de marka korunur", () => {
+    const p = qs("kategori=forklift&marka=Scania&il=İstanbul,Ankara");
+    clearAndPrune(p, "il");
+    expect(p.get("marka")).toBe("Scania");
+  });
+
+  it("değişen parametre verilmezse (sesli arama, link) yapısal budama yapılır, marka kalır", () => {
+    const p = qs("kategori=forklift&altKategori=beko-loder&marka=Scania&il=Ankara&ilce=Kadıköy");
+    pruneDependents(p);
+    expect(p.has("altKategori")).toBe(false);
+    expect(p.has("ilce")).toBe(false);
+    expect(p.get("marka")).toBe("Scania");
+  });
+
+  it("il değişince kategori bağımlılarına dokunulmaz", () => {
+    const field = specFieldsForSelection(["hafriyat"], [])[0];
+    const p = qs(`kategori=hafriyat&spec_${field.key}=1&nakliye=var`);
+    toggleAndPrune(p, "il", "Ankara");
+    expect(p.get(`spec_${field.key}`)).toBe("1");
+    expect(p.get("nakliye")).toBe("var");
   });
 });
 

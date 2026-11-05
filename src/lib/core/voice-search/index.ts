@@ -321,9 +321,8 @@ function sanitize(params: Record<string, string>): Record<string, string> {
     if (ok && value !== "") known.set(key, value);
   }
   if (known.get("sirala") === "onerilen") known.delete("sirala");
-  const brands = known.get("marka");
+  // Değişen parametre verilmez: yapısal budama, marka dokunulmaz.
   pruneDependents(known);
-  if (brands) known.set("marka", brands);
   return Object.fromEntries(known);
 }
 

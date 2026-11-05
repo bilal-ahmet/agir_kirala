@@ -63,37 +63,54 @@ export function operatorLabelCategory(cats: string[]): string | undefined {
 }
 
 /**
- * Bağımlı parametreleri budar. Kategori, alt kategori veya il değiştikten
- * sonra çağrılır (aynı mutator içinde).
+ * Bağımlı parametreleri budar. Yalnız DEĞİŞEN üst seçime bağlı olanlara
+ * dokunur (aynı mutator içinde çağrılır):
+ *
+ * - il → ilçe ("İl/İlçe" biçimine normalleştirilir, yalnız seçili illerden).
+ * - kategori / alt kategori → alt kategori, marka, teknik özellik, nakliye.
+ * - `changed` verilmezse (sesli arama, dışarıdan gelen link) yapısal budama
+ *   yapılır ama marka budanmaz: söylenen/gönderilen marka kategorinin
+ *   listesinde olmasa da aranır, uygun ilan yoksa sonuç sayfası bunu söyler.
+ *
+ * Marka listesi yalnız kategori/alt kategoriye bağlıdır; il değişince marka
+ * budansaydı "Scania forklift" aramasında il çipini kaldırmak Scania'yı da
+ * sessizce silerdi. Mobil uygulama da aynı kuralı uygular.
  */
-export function pruneDependents(p: URLSearchParams) {
-  const cats = listOf(p, "kategori");
+export function pruneDependents(p: URLSearchParams, changed?: string) {
+  const byCategory = changed === undefined || changed === "kategori" || changed === "altKategori";
+  const byLocation = changed === undefined || changed === "il";
 
-  // Alt kategori: yalnız seçili kategorilere ait olanlar.
-  const ownSubs = new Set(cats.flatMap((c) => getCategory(c)?.subcategories.map((s) => s.slug) ?? []));
-  const subs = listOf(p, "altKategori").filter((s) => ownSubs.has(s));
-  setList(p, "altKategori", subs);
+  if (byCategory) {
+    const cats = listOf(p, "kategori");
+
+    // Alt kategori: yalnız seçili kategorilere ait olanlar.
+    const ownSubs = new Set(cats.flatMap((c) => getCategory(c)?.subcategories.map((s) => s.slug) ?? []));
+    const subs = listOf(p, "altKategori").filter((s) => ownSubs.has(s));
+    setList(p, "altKategori", subs);
+
+    // Marka: kullanıcı kategori seçimini değiştirdiyse, yeni seçimin listesinde kalanlar.
+    if (changed !== undefined) {
+      const brands = new Set(brandsForSelection(cats, subs));
+      setList(p, "marka", listOf(p, "marka").filter((b) => brands.has(b)));
+    }
+
+    // Teknik özellikler: yalnız hâlâ gösterilen alanlar.
+    const valid = new Set(specFieldsForSelection(cats, subs).map((f) => `spec_${f.key}`));
+    [...p.keys()].filter((k) => k.startsWith("spec_") && !valid.has(k)).forEach((k) => p.delete(k));
+
+    // Nakliye: hiçbir seçili kategoride anlamlı değilse.
+    if (!transportAppliesToSelection(cats)) p.delete("nakliye");
+  }
 
   // İlçe: yalnız seçili illere ait olanlar, "İl/İlçe" biçimine normalleştirilmiş.
-  setList(p, "ilce", selectedDistricts(p));
-
-  // Marka: yeni seçimin marka listesinde kalanlar.
-  const brands = new Set(brandsForSelection(cats, subs));
-  setList(p, "marka", listOf(p, "marka").filter((b) => brands.has(b)));
-
-  // Teknik özellikler: yalnız hâlâ gösterilen alanlar.
-  const valid = new Set(specFieldsForSelection(cats, subs).map((f) => `spec_${f.key}`));
-  [...p.keys()].filter((k) => k.startsWith("spec_") && !valid.has(k)).forEach((k) => p.delete(k));
-
-  // Nakliye: hiçbir seçili kategoride anlamlı değilse.
-  if (!transportAppliesToSelection(cats)) p.delete("nakliye");
+  if (byLocation) setList(p, "ilce", selectedDistricts(p));
 }
 
-/** Listede değeri aç/kapat, ardından bağımlıları buda. */
+/** Listede değeri aç/kapat, ardından o parametreye bağlı olanları buda. */
 export function toggleAndPrune(p: URLSearchParams, key: string, value: string) {
   const cur = listOf(p, key);
   setList(p, key, cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]);
-  pruneDependents(p);
+  pruneDependents(p, key);
 }
 
 /** İlçe aç/kapat ("İl/İlçe"). Önce yalın adlar normalleştirilir ki kaldırma çalışsın. */
@@ -102,8 +119,8 @@ export function toggleDistrict(p: URLSearchParams, scoped: string) {
   setList(p, "ilce", cur.includes(scoped) ? cur.filter((v) => v !== scoped) : [...cur, scoped]);
 }
 
-/** Parametreyi tamamen temizle, ardından bağımlıları buda. */
+/** Parametreyi tamamen temizle, ardından o parametreye bağlı olanları buda. */
 export function clearAndPrune(p: URLSearchParams, key: string) {
   p.delete(key);
-  pruneDependents(p);
+  pruneDependents(p, key);
 }
