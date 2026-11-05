@@ -136,7 +136,13 @@ kurallarından geçer (`src/lib/filter-selection.ts`): alt kategori yalnız
 seçili kategoriden, `spec_*` yalnız tek kategori seçiliyken. Marka
 budanmaz: kategorinin listesinde olmasa da söylenen marka aranır ("Scania
 forklift" → `kategori=forklift&marka=Scania`); istemci filtre ekranında bu
-markayı seçili olarak göstermeli ki kullanıcı kaldırabilsin. Seçenekli teknik özellikler de tanınır ("Euro 6 otomatik çekici" →
+markayı seçili olarak göstermeli ki kullanıcı kaldırabilsin.
+
+**Bağımlı filtre budaması (web ve mobil aynı):** yalnız değişen üst seçime
+bağlı olanlar budanır. İl değişince yalnız ilçe; kategori ya da alt kategori
+değişince alt kategori, marka, `spec_*` ve nakliye. Marka listesi yalnız
+kategori/alt kategoriye bağlıdır: il çipini kaldırmak listede olmayan markayı
+(Scania) silmez. Seçenekli teknik özellikler de tanınır ("Euro 6 otomatik çekici" →
 `spec_euroNorm=Euro 6&spec_sanziman=Otomatik`); çipi "Emisyon Normu: Euro 6".
 Birden çok il varken ilçe çipinin etiketi "Çankaya (Ankara)" olur.
 
