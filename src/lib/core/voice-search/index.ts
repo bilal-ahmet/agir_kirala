@@ -6,11 +6,18 @@
  * mobil aynı sonucu versin ve eş anlamlı eklemek mağaza güncellemesi istemesin.
  *
  * Akış: kurallar (bedava, anında) → gerekirse LLM yedeği → URL parametreleri.
- * Çıktı mevcut arama sözleşmesine (parseFilters) karşı süzülür: bu katman yeni
+ * Çıktı mevcut arama sözleşmesine (parseFilters) karşı süzülür ve filtre
+ * panelinin budama kurallarından (filter-selection.ts) geçer: bu katman yeni
  * bir arama motoru değil, mevcut filtrelerin sesli kısayoludur.
+ *
+ * İki mod:
+ * - new: yeni arama ("Ankara ve İzmir'de kepçe").
+ * - refine: istemci mevcut filtreleri `current` olarak gönderdiyse ve cümle
+ *   bir düzenleme ise ("Kocaeli'yi de ekle", "JCB'yi çıkar", "en ucuza göre
+ *   sırala") o filtreler değiştirilir. Dönen params her iki modda da TAM kümedir.
  */
 
-import { getCategory, getSubCategoryName, transportApplies } from "../../categories";
+import { CATEGORIES, getCategory, getSubCategoryName } from "../../categories";
 import {
   CONDITION_LABELS,
   FUEL_LABELS,
@@ -20,12 +27,14 @@ import {
   SORT_OPTIONS,
 } from "../../constants";
 import { parseFilters } from "../../filter-params";
-import type { FilterState } from "../../types";
+import { pruneDependents } from "../../filter-selection";
+import { parseDistrict } from "../../locations";
+import type { FilterState, FuelType, RentalPeriod } from "../../types";
 import { fail, ok, type Result } from "../errors";
 import { voiceQuerySchema } from "../schemas";
 import { llmEnabled, parseWithLlm } from "./llm";
-import { looksLikeModel, parseWithRules } from "./rules";
-import type { VoiceChip, VoiceFilters, VoiceParseResult } from "./types";
+import { looksLikeModel, parseWithRules, type RulesIntent, type RulesResult } from "./rules";
+import { emptyFilters, LIST_KEYS, type VoiceChip, type VoiceFilters, type VoiceParseResult } from "./types";
 
 export type { VoiceChip, VoiceParseResult } from "./types";
 
@@ -42,15 +51,20 @@ export interface VoiceParseOptions {
   llm?: boolean;
   /** Test için LLM bağımlılığı. */
   llmDeps?: Parameters<typeof parseWithLlm>[2];
-  /**
-   * Güvenlik ağı: bu parametrelerle en az bir ilan var mı. Verilirse ve
-   * tanınan filtrelerin yanında kod olmayan bir q kaldıysa sorulur; q yüzünden
-   * sonuç sıfırsa q atılır. Dolgu listesi hiçbir zaman tam olamaz ("abi",
-   * "müsait" …); sızan tek kelime boş sonuç ekranı demekti. Bedeli yalnız bu
-   * durumda bir DB round-trip'i. Hata verirse q olduğu gibi kalır.
-   */
-  hasResults?: (params: Record<string, string>) => Promise<boolean>;
 }
+
+// Bilinçli ilke: söylenen hiçbir filtre "sonuç çıkmıyor" diye sessizce
+// atılmaz. Kullanıcı ne dediyse o aranır; uygun ilan yoksa sonuç sayfası
+// bunu söyler ve filtreler çip olarak görünür, kullanıcı kendisi kaldırır.
+// (Eskiden sonuç sıfırsa serbest kelime q atılıyor, kategorinin listesinde
+// olmayan marka budanıyordu.)
+
+/** Sesli aramanın kendisinin ürettiği parametreler; gerisi düzenlemede olduğu gibi korunur. */
+const VOICE_KEYS = new Set([
+  "q", "kategori", "altKategori", "il", "ilce", "marka", "periyot", "operator", "nakliye",
+  "durum", "yakit", "minFiyat", "maxFiyat", "minYil", "maxYil", "sirala",
+]);
+const isVoiceKey = (k: string) => VOICE_KEYS.has(k) || k.startsWith("spec_");
 
 export async function parseVoiceQuery(
   input: unknown,
@@ -62,8 +76,24 @@ export async function parseVoiceQuery(
   }
   const text = parsed.data.text.replace(/\s+/g, " ");
 
-  const rules = parseWithRules(text);
-  let filters = rules.filters;
+  // Mevcut filtreler de aynı süzgeçten geçer: istemci ne gönderirse göndersin
+  // taban, filtre panelinin göstereceği geçerli bir seçimdir.
+  const current = sanitize(parsed.data.current ?? {});
+  delete current.sayfa;
+  const hasCurrent = Object.keys(current).length > 0;
+  const currentFilters = fromParams(current);
+
+  const rules = parseWithRules(
+    text,
+    hasCurrent
+      ? { kategori: currentFilters.kategori, altKategori: currentFilters.altKategori, il: currentFilters.il }
+      : undefined,
+  );
+  let mode = decideMode(rules, hasCurrent);
+  // "Filtreleri temizle" de bir düzenlemedir ama tabanı boştur.
+  const keepCurrent = () => mode === "refine" && !rules.intent.reset;
+  let base = keepCurrent() ? currentFilters : emptyFilters();
+  let ops = rules.filters;
   let source: VoiceParseResult["source"] = "rules";
 
   const useLlm = options.llm !== false && (options.llmDeps?.client || llmEnabled());
@@ -75,62 +105,141 @@ export async function parseVoiceQuery(
       allowed = false;
     }
     if (allowed) {
-      const llm = await parseWithLlm(text, rules.filters, options.llmDeps);
+      const llm = await parseWithLlm(text, rules.filters, options.llmDeps, hasCurrent ? currentFilters : undefined);
       if (llm) {
-        filters = merge(rules.filters, llm);
         source = "llm";
+        // Açık bir komut ("ekle", "çıkar", "baştan") varsa kural kararı geçerli.
+        if (hasCurrent && !explicitIntent(rules.intent)) mode = llm.mode;
+        // LLM tam kümeyi verir (düzenlemede mevcut filtreler dahil); kural
+        // sonucu üstüne uygulanır ki kesin eşleşmeler kaybolmasın.
+        base = llm.filters;
+        // LLM teknik özellik yazmaz; düzenlemede mevcutlar korunur.
+        if (keepCurrent()) base.specs = { ...currentFilters.specs };
+        // Sözlük 81 ilin tamamını tanır: kurallar il bulduysa LLM'in fazladan
+        // eklediği il büyük olasılıkla hatadır. (Makine türünde öyle değil:
+        // "toprak kazacak bir şey ya da forklift" → LLM hafriyatı haklı ekler.)
+        if (mode === "new" && rules.filters.il.length) {
+          base.il = base.il.filter((p) => rules.filters.il.includes(p));
+          base.ilce = base.ilce.filter((d) => base.il.includes(parseDistrict(d).il ?? ""));
+        }
+        ops = { ...rules.filters, q: rulesQIsModel(rules) ? rules.filters.q : undefined };
       }
     }
   }
 
-  const params = sanitize(toParams(filters));
-  // Model kodu kasıtlıdır: "JCB 3CX" bulunamıyorsa kullanıcı bunu görmeli,
-  // yerine tüm JCB'ler gösterilmemeli. Yalnız serbest kelimeler denetlenir.
-  const freeText = params.q !== undefined && !params.q.split(" ").some(looksLikeModel);
-  if (options.hasResults && freeText && Object.keys(params).length > 1) {
-    try {
-      if (!(await options.hasResults(params))) delete params.q;
-    } catch (e) {
-      console.warn("[voice-search] sonuç denetimi yapılamadı:", e instanceof Error ? e.message : e);
-    }
-  }
+  const merged = applyOps(base, ops, rules.intent);
+  const params = sanitize({
+    // Sesin modellemediği filtreler (fotoğraflı, satıcı tipi…) düzenlemede korunur.
+    ...(keepCurrent() ? Object.fromEntries(Object.entries(current).filter(([k]) => !isVoiceKey(k))) : {}),
+    ...toParams(merged),
+  });
 
+  const chips = toChips(params);
   return ok({
     text,
     params,
-    chips: toChips(params),
+    chips,
     remainder: rules.remainder.join(" "),
     source,
+    mode,
+    ...(mode === "refine" ? { changes: diffChips(toChips(current), chips) } : {}),
   });
 }
 
+/** "ekle", "sadece", "çıkar/yerine", "baştan": kullanıcı ne istediğini açıkça söyledi. */
+function explicitIntent(i: RulesIntent): boolean {
+  return i.add || i.reset || i.removeVerb || i.only.length > 0;
+}
+
+function rulesQIsModel(rules: RulesResult): boolean {
+  const q = rules.filters.q;
+  return q !== undefined && q.split(" ").every(looksLikeModel);
+}
+
 /**
- * Kural sonucu önceliklidir (deterministik ve doğrulanmış); LLM yalnız boşları
- * doldurur. İstisna q: kurallar kalan kelimeleri olduğu gibi q yapar, LLM ise
- * bunları zaten filtrelere dağıtmıştır — model kodu değilse LLM'in q'su alınır.
+ * Yeni arama mı, mevcut filtrelerin düzenlemesi mi.
+ *
+ * Açık komut ("ekle", "sadece", "çıkar", "yerine") → düzenleme; "baştan"/
+ * "yeni arama" → yeni. Komut yoksa: cümle bir makine, yer ya da marka
+ * söylüyorsa yeni aramadır ("Ankara'da forklift"); yalnız niteleyici
+ * söylüyorsa ("operatörlü olsun", "en ucuza göre sırala", "JCB olmasın")
+ * düzenlemedir. Yalın "de/da" bilerek işaret sayılmaz (bkz. rules.ts).
  */
-export function merge(rules: VoiceFilters, llm: VoiceFilters): VoiceFilters {
-  const out: VoiceFilters = {
-    ...llm,
-    ...Object.fromEntries(Object.entries(rules).filter(([, v]) => v !== undefined)),
-    marka: [...new Set([...rules.marka, ...llm.marka])],
-    periyot: rules.periyot.length ? rules.periyot : llm.periyot,
-    yakit: rules.yakit.length ? rules.yakit : llm.yakit,
-    specs: { ...llm.specs, ...rules.specs },
-  };
+export function decideMode(rules: RulesResult, hasCurrent: boolean): VoiceParseResult["mode"] {
+  if (!hasCurrent) return "new";
+  const { intent, filters: f } = rules;
+  // "Filtreleri temizle": hepsini kaldıran bir düzenleme (sonuç boş küme).
+  if (intent.reset) return hasAnyFilter(f) ? "new" : "refine";
+  if (intent.add || intent.removeVerb || intent.only.length) return "refine";
+  const primary = f.kategori.length || f.altKategori.length || f.il.length || f.ilce.length || f.marka.length;
+  if (primary) return "new";
+  const modifiers =
+    LIST_KEYS.some((k) => f.removed[k].length) ||
+    f.periyot.length ||
+    f.yakit.length ||
+    Object.keys(f.specs).length ||
+    [f.operator, f.nakliye, f.durum, f.minFiyat, f.maxFiyat, f.minYil, f.maxYil, f.sirala].some((v) => v !== undefined);
+  return modifiers ? "refine" : "new";
+}
 
-  // Alt kategori kategorisiyle birlikte gelir; kurallar yalnız kategori bulduysa
-  // LLM'in alt kategorisi ancak aynı kategorideyse kabul edilir.
-  if (!rules.altKategori) {
-    const sameCategory = !rules.kategori || rules.kategori === llm.kategori;
-    out.kategori = rules.kategori ?? llm.kategori;
-    out.altKategori = sameCategory ? llm.altKategori : undefined;
+function hasAnyFilter(f: VoiceFilters): boolean {
+  return Object.keys(toParams(f)).length > 0;
+}
+
+const SUB_OWNER = new Map(CATEGORIES.flatMap((c) => c.subcategories.map((s) => [s.slug, c.slug] as const)));
+
+/**
+ * Tabana cümlenin işlemlerini uygular.
+ *
+ * - Listeler: taban ∪ söylenenler − çıkarılanlar; "sadece" denen boyut değiştirilir.
+ * - Bir kategorinin seçili alt türlerinin hepsi çıkarıldıysa kategori de çıkar:
+ *   "kepçe ve forklift" → "kepçeyi çıkar" → yalnız forklift (tüm hafriyat değil).
+ * - Tekil alanlar (operatör, fiyat, sıralama, q…): söylenen kazanır.
+ * - periyot/yakıt/seçenekli özellik: "de ekle" ise birleşim, değilse değiştirme.
+ *
+ * Yeni aramada taban boştur (ya da LLM'in kümesi); işlem idempotent olduğu
+ * için LLM'in zaten uyguladığı bir değişikliği ikinci kez uygulamak zararsız.
+ */
+export function applyOps(base: VoiceFilters, ops: VoiceFilters, intent: Pick<RulesIntent, "add" | "only">): VoiceFilters {
+  const out = emptyFilters();
+  const union = <T>(a: T[], b: T[]) => [...new Set([...a, ...b])];
+
+  for (const key of LIST_KEYS) {
+    const removed = ops.removed[key];
+    const kept = intent.only.includes(key) && ops[key].length ? ops[key] : union(base[key], ops[key]);
+    out[key] = kept.filter((v) => {
+      if (removed.includes(v)) return false;
+      // İlçe yalın adla çıkarılabilir ("Çankaya'yı çıkar" → "Ankara/Çankaya").
+      return key !== "ilce" || !removed.includes(parseDistrict(v).ilce);
+    });
   }
-  // İlçe ili izler.
-  if (!rules.ilce) out.ilce = out.il === llm.il ? llm.ilce : undefined;
 
-  const rulesQIsModel = rules.q !== undefined && rules.q.split(" ").every(looksLikeModel);
-  out.q = rulesQIsModel ? rules.q : llm.q;
+  for (const sub of ops.removed.altKategori) {
+    const cat = SUB_OWNER.get(sub);
+    if (!cat || !base.altKategori.includes(sub) || ops.kategori.includes(cat)) continue;
+    const left = out.altKategori.some((s) => SUB_OWNER.get(s) === cat);
+    if (!left) out.kategori = out.kategori.filter((c) => c !== cat);
+  }
+
+  const list = <T>(b: T[], o: T[]) => (o.length ? (intent.add ? union(b, o) : o) : b);
+  out.periyot = list<RentalPeriod>(base.periyot, ops.periyot);
+  out.yakit = list<FuelType>(base.yakit, ops.yakit);
+
+  out.specs = { ...base.specs };
+  for (const [k, v] of Object.entries(ops.specs)) {
+    const cur = out.specs[k];
+    out.specs[k] = Array.isArray(v) && Array.isArray(cur) && intent.add ? union(cur, v) : v;
+  }
+
+  out.q = ops.q ?? base.q;
+  out.operator = ops.operator ?? base.operator;
+  out.nakliye = ops.nakliye ?? base.nakliye;
+  out.durum = ops.durum ?? base.durum;
+  out.minFiyat = ops.minFiyat ?? base.minFiyat;
+  out.maxFiyat = ops.maxFiyat ?? base.maxFiyat;
+  out.minYil = ops.minYil ?? base.minYil;
+  out.maxYil = ops.maxYil ?? base.maxYil;
+  out.sirala = ops.sirala ?? base.sirala;
   return out;
 }
 
@@ -139,46 +248,83 @@ export function toParams(f: VoiceFilters): Record<string, string> {
   const put = (k: string, v: string | number | undefined) => {
     if (v !== undefined && v !== "") p[k] = String(v);
   };
+  const putList = (k: string, v: string[]) => {
+    if (v.length) p[k] = v.join(",");
+  };
   put("q", f.q);
-  put("kategori", f.kategori);
-  put("altKategori", f.altKategori);
-  put("il", f.il);
-  put("ilce", f.ilce);
-  if (f.marka.length) p.marka = f.marka.join(",");
-  if (f.periyot.length) p.periyot = f.periyot.join(",");
+  putList("kategori", f.kategori);
+  putList("altKategori", f.altKategori);
+  putList("il", f.il);
+  putList("ilce", f.ilce);
+  putList("marka", f.marka);
+  putList("periyot", f.periyot);
   put("operator", f.operator);
   put("nakliye", f.nakliye);
   put("durum", f.durum);
-  if (f.yakit.length) p.yakit = f.yakit.join(",");
+  putList("yakit", f.yakit);
   put("minFiyat", f.minFiyat);
   put("maxFiyat", f.maxFiyat);
   put("minYil", f.minYil);
   put("maxYil", f.maxYil);
   if (f.sirala && f.sirala !== "onerilen") p.sirala = f.sirala;
-  for (const [k, v] of Object.entries(f.specs)) put(`spec_${k}`, v);
+  for (const [k, v] of Object.entries(f.specs)) {
+    if (Array.isArray(v)) putList(`spec_${k}`, v);
+    else put(`spec_${k}`, v);
+  }
   return p;
 }
 
+/** Süzülmüş URL parametrelerinden VoiceFilters (düzenlemenin tabanı). */
+function fromParams(params: Record<string, string>): VoiceFilters {
+  const s: FilterState = parseFilters(params);
+  const f = emptyFilters();
+  f.q = s.q;
+  f.kategori = s.kategori ?? [];
+  f.altKategori = s.altKategori ?? [];
+  f.il = s.il ?? [];
+  f.ilce = s.ilce ?? [];
+  f.marka = s.marka ?? [];
+  f.periyot = s.periyot ?? [];
+  f.yakit = s.yakit ?? [];
+  // Panelde ikisi birden işaretliyse ("operatörlü" + "operatörsüz") filtre yok demektir.
+  const one = <T>(v: T[] | undefined) => (v?.length === 1 ? v[0] : undefined);
+  f.operator = one(s.operator);
+  f.nakliye = one(s.nakliye);
+  f.durum = one(s.durum);
+  f.minFiyat = s.minFiyat;
+  f.maxFiyat = s.maxFiyat;
+  f.minYil = s.minYil;
+  f.maxYil = s.maxYil;
+  f.sirala = s.sirala && s.sirala !== "onerilen" ? s.sirala : undefined;
+  f.specs = { ...(s.specs ?? {}) };
+  return f;
+}
+
 /**
- * Üretilen parametreleri mevcut arama ayrıştırıcısından geçirir ve onun
- * tanımadığı her şeyi atar. Böylece bu modül hiçbir zaman sonuç sayfasının
- * sessizce yok sayacağı bir URL üretmez.
+ * Parametreleri mevcut arama ayrıştırıcısından geçirir ve onun tanımadığı her
+ * şeyi atar; ardından filtre panelinin yapısal budamasını uygular (alt
+ * kategori yalnız seçili kategoriden, ilçe "İl/İlçe" ve yalnız seçili ilden,
+ * teknik özellik yalnız tek kategoride, nakliye yalnız uygun kategoride).
+ * Böylece bu modül sonuç sayfasının sessizce yok sayacağı bir URL üretmez.
+ *
+ * Marka budanmaz: "Scania forklift" denirse ikisi de aranır; öyle bir ilan
+ * yoksa sonuç sayfası "uygun ilan yok" der. Söyleneni atmak, kullanıcıya
+ * istemediği sonuçları göstermek olurdu.
  */
 function sanitize(params: Record<string, string>): Record<string, string> {
   const parsed = parseFilters(params);
-  const out: Record<string, string> = {};
+  const known = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    const known = key.startsWith("spec_")
+    const ok = key.startsWith("spec_")
       ? parsed.specs?.[key.slice(5)] !== undefined
       : parsed[key as keyof FilterState] !== undefined;
-    if (known) out[key] = value;
+    if (ok && value !== "") known.set(key, value);
   }
-  // Alt kategori kategorisiz anlamsızdır (filtre paneli de böyle davranır).
-  if (out.altKategori && !out.kategori) delete out.altKategori;
-  // Tırın kendisi nakliye aracıdır; tır ilanlarında transport hep "yok". "Nakliye
-  // için tır" cümlesindeki nakliye filtresi kalsaydı sonuç sıfır olurdu.
-  if (out.nakliye && !transportApplies(out.kategori)) delete out.nakliye;
-  return out;
+  if (known.get("sirala") === "onerilen") known.delete("sirala");
+  const brands = known.get("marka");
+  pruneDependents(known);
+  if (brands) known.set("marka", brands);
+  return Object.fromEntries(known);
 }
 
 const tl = (n: string) => `${Number(n).toLocaleString("tr-TR")} ₺`;
@@ -187,16 +333,21 @@ const SORT_LABELS = Object.fromEntries(SORT_OPTIONS.map((s) => [s.value, s.label
 export function toChips(params: Record<string, string>): VoiceChip[] {
   const chips: VoiceChip[] = [];
   const add = (param: string, value: string, label: string) => chips.push({ param, value, label });
-  const many = (key: string, label: (v: string) => string) =>
-    params[key]?.split(",").forEach((v) => add(key, v, label(v)));
+  const values = (key: string) => params[key]?.split(",").filter(Boolean) ?? [];
+  const many = (key: string, label: (v: string) => string) => values(key).forEach((v) => add(key, v, label(v)));
 
-  const category = getCategory(params.kategori);
-  if (category) add("kategori", category.slug, category.name);
-  if (category && params.altKategori) {
-    add("altKategori", params.altKategori, getSubCategoryName(category.slug, params.altKategori));
-  }
-  if (params.il) add("il", params.il, params.il);
-  if (params.ilce) add("ilce", params.ilce, params.ilce);
+  const cats = values("kategori");
+  many("kategori", (v) => getCategory(v)?.name ?? v);
+  many("altKategori", (v) => {
+    const owner = SUB_OWNER.get(v);
+    return owner ? getSubCategoryName(owner, v) : v;
+  });
+  many("il", (v) => v);
+  const severalProvinces = values("il").length > 1;
+  many("ilce", (v) => {
+    const { il, ilce } = parseDistrict(v);
+    return severalProvinces && il ? `${ilce} (${il})` : ilce;
+  });
   many("marka", (v) => v);
   if (params.q) add("q", params.q, `"${params.q}"`);
   many("periyot", (v) => PERIOD_LABELS[v as keyof typeof PERIOD_LABELS] ?? v);
@@ -208,12 +359,31 @@ export function toChips(params: Record<string, string>): VoiceChip[] {
   if (params.maxFiyat) add("maxFiyat", params.maxFiyat, `En fazla ${tl(params.maxFiyat)}`);
   if (params.minYil) add("minYil", params.minYil, `${params.minYil} ve sonrası`);
   if (params.maxYil) add("maxYil", params.maxYil, `${params.maxYil} ve öncesi`);
+  // Teknik alanlar yalnız tek kategoride bulunur (bkz. sanitize).
+  const fields = cats.length === 1 ? (getCategory(cats[0])?.specFields ?? []) : [];
   for (const [key, value] of Object.entries(params)) {
     if (!key.startsWith("spec_")) continue;
-    const field = category?.specFields.find((s) => s.key === key.slice(5));
-    const unit = field?.unit ? ` ${field.unit}` : "";
-    add(key, value, `${field?.label ?? key.slice(5)} ≥ ${Number(value).toLocaleString("tr-TR")}${unit}`);
+    const field = fields.find((s) => s.key === key.slice(5));
+    const name = field?.label ?? key.slice(5);
+    const n = Number(value);
+    if (Number.isFinite(n)) {
+      const unit = field?.unit ? ` ${field.unit}` : "";
+      add(key, value, `${name} ≥ ${n.toLocaleString("tr-TR")}${unit}`);
+    } else {
+      values(key).forEach((v) => add(key, v, v === "true" ? name : `${name}: ${v}`));
+    }
   }
   if (params.sirala) add("sirala", params.sirala, SORT_LABELS[params.sirala] ?? params.sirala);
   return chips;
+}
+
+/** Düzenlemede kullanıcıya "şunu ekledim / şunu çıkardım" diye gösterilen fark. */
+function diffChips(before: VoiceChip[], after: VoiceChip[]): { added: VoiceChip[]; removed: VoiceChip[] } {
+  const id = (c: VoiceChip) => `${c.param}\u0000${c.value}`;
+  const had = new Set(before.map(id));
+  const has = new Set(after.map(id));
+  return {
+    added: after.filter((c) => !had.has(id(c))),
+    removed: before.filter((c) => !has.has(id(c))),
+  };
 }

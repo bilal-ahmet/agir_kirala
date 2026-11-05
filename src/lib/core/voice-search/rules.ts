@@ -11,14 +11,42 @@
  *   D) Bulanık eşleme: kalan kelimelerde konuşma tanıma yazım hataları.
  * Kalan anlamlı kelimeler `remainder` olur. Model kodları ("3CX", "PC210")
  * burada kalır ve serbest metin araması (q) olarak kullanılır.
+ *
+ * Her boyut çoklu değer alır ("Ankara ve İzmir'de kepçe ya da forklift").
+ * Cümle aynı zamanda mevcut filtreleri düzenleyen bir komut olabilir
+ * ("Kocaeli'yi de ekle", "JCB'yi çıkar"); motor bunun işaretlerini `intent`
+ * olarak döndürür, kararı ve birleştirmeyi index.ts verir.
  */
 
-import { getCategory } from "../../categories";
 import { MAX_YEAR } from "../../constants";
+import { specFieldsForSelection } from "../../filter-selection";
+import { scopedDistrict } from "../../locations";
 import type { FuelType, OperatorFilter, RentalPeriod, SortKey, TransportFilter } from "../../types";
 import { lexicon, type LexEntry } from "./lexicon";
 import { phraseKey, stems, tokenize, type Token } from "./normalize";
-import { emptyFilters, type VoiceFilters } from "./types";
+import { emptyFilters, type ListKey, type VoiceFilters } from "./types";
+
+export interface RulesIntent {
+  /** "… de ekle", "bir de …", "ayrıca": mevcut seçime ekleme. */
+  add: boolean;
+  /** "yeni arama", "baştan", "sıfırla", "filtreleri temizle". */
+  reset: boolean;
+  /** "sadece X": X'in boyutu tamamen değiştirilir. */
+  only: ListKey[];
+  /** "çıkar", "kaldır", "sil", "yerine": açık düzenleme komutu (olumsuzluk dahil değil). */
+  removeVerb: boolean;
+}
+
+/**
+ * Cümlenin dışından gelen bağlam: düzenlenen aramadaki seçimler. Yalnız
+ * cümle kendisi söylemediğinde kullanılır ("20 tonluk olsun" → hangi
+ * kategorinin alanı; "Yenişehir'i de ekle" → hangi ilin ilçesi).
+ */
+export interface RulesContext {
+  kategori: string[];
+  altKategori: string[];
+  il: string[];
+}
 
 export interface RulesResult {
   filters: VoiceFilters;
@@ -31,6 +59,7 @@ export interface RulesResult {
    * "high": her şey tanındı ya da kalanlar model kodu gibi görünüyor.
    */
   confidence: "high" | "low";
+  intent: RulesIntent;
 }
 
 // ───────── Dolgu kelimeleri ─────────
@@ -61,8 +90,25 @@ const FILLERS = new Set([
   // Zaman: "salı günü lazım", "haftaya". Süre kalıpları ("3 gün") önce tüketir.
   "pazartesi", "sali", "carsamba", "persembe", "cuma", "cumartesi", "gun", "gunu", "haftaya", "haftasonu",
   // Sayıdan ayrılan hâl ekleri (bkz. normalize.ts → splitNumberSuffix).
-  "den", "dan", "ten", "tan", "lik", "luk", "ya", "e", "a",
+  "den", "dan", "ten", "tan", "lik", "luk", "ya", "in", "un", "e", "a",
+  // Ölçünün fiili: "3 ton kaldıran forklift" — anlamı ölçü kalıbı taşır.
+  "kaldiran", "kaldirabilen", "kaldiracak", "kapasite", "kapasiteli", "kapasitesi",
+  // Düzenleme komutları (anlamları `intent` ve `removed` ile okunur).
+  "ekle", "ekleyin", "ekler", "eklesene", "eklensin", "ekleyelim", "ilave", "ayrica", "dahil", "et",
+  "yerine", "sirf", "arama", "aramayi", "filtre", "filtreler", "filtreleri", "bastan", "hem", "yahut",
 ]);
+
+/** "X'i çıkar", "X'i kaldırır mısın". Yalnız emir/edilgen biçimler: "yük kaldıran forklift" bir komut değil. */
+const REMOVE_VERBS = new Set([
+  "cikar", "cikarin", "cikart", "cikartin", "cikarilsin", "cikaralim", "cikarir", "cikarsana",
+  "kaldir", "kaldirin", "kaldirilsin", "kaldiralim", "kaldirir", "kaldirsana",
+  "sil", "silin", "silinsin", "silsene",
+]);
+
+const ONLY_WORDS = new Set(["sadece", "yalniz", "yalnizca", "sirf"]);
+
+/** Ardışık eşleşmeleri bağlayan kelimeler: "JCB ve Volvo'yu çıkar" iki markayı da çıkarır. */
+const CONJUNCTIONS = new Set(["ve", "veya", "ile", "ya", "da", "de", "yahut", "hem"]);
 
 /**
  * Ekli biçimleri de dolgu olan kökler. Tam eşleşme yetmiyordu: "tır
@@ -92,7 +138,8 @@ function isNegator(key: string): boolean {
 
 function isFiller(key: string): boolean {
   // Eşleşmenin arkasında kalmayan olumsuzluk ("istemiyorum" tek başına) de q'ya girmez.
-  if (isNegator(key)) return true;
+  if (isNegator(key) || REMOVE_VERBS.has(key)) return true;
+  if (/^(?:temizle|sifirla)/.test(key)) return true;
   if (FILLER_PREFIXES.some((p) => key.startsWith(p))) return true;
   // "makineleri", "araçları", "modeli": ek alınınca dolgu köküne iner.
   return stems(key).some((s) => FILLERS.has(s));
@@ -113,6 +160,9 @@ interface Ctx {
   recognized: number;
   /** Kategori bilinmeden çözülemeyen ölçüler ("20 tonluk"). */
   measures: Measure[];
+  context: RulesContext;
+  only: Set<ListKey>;
+  removeVerb: boolean;
 }
 
 /**
@@ -188,6 +238,30 @@ function takeNegation(ctx: Ctx, last: number): boolean {
   return false;
 }
 
+/**
+ * Sözlük eşleşmesinin ardındaki çıkarma ifadesini tüketir: olumsuzluk
+ * ("JCB olmasın"), çıkarma fiili ("JCB'yi çıkar") ya da "yerine" ("Ankara
+ * yerine İzmir" → Ankara çıkar). Fiil ve "yerine" açık bir düzenleme
+ * komutudur; olumsuzluk değil (yeni aramada da söylenebilir).
+ */
+function takeRemoval(ctx: Ctx, last: number): boolean {
+  for (let k = last + 1; k < ctx.tokens.length && k <= last + 3; k++) {
+    if (ctx.used[k]) return false;
+    const key = ctx.tokens[k].key;
+    if (isNegator(key)) {
+      ctx.used[k] = true;
+      return true;
+    }
+    if (REMOVE_VERBS.has(key) || (key === "yerine" && k === last + 1)) {
+      ctx.used[k] = true;
+      ctx.removeVerb = true;
+      return true;
+    }
+    if (!isFiller(key)) return false;
+  }
+  return false;
+}
+
 // ───────── A) Çok kelimeli kalıplar ─────────
 
 function phaseA(ctx: Ctx): void {
@@ -234,7 +308,12 @@ function phaseA(ctx: Ctx): void {
   scan(ctx, new RegExp(`(?:en fazla|en cok|maksimum|max|azami) (\\d+)${NOT_PRICE_AFTER}`), (m) => maxPrice(Number(m[1])));
   // "5 binden ucuz", "5000'den az", "5000 altı", "10 bine kadar".
   scan(ctx, /(\d+)(?: (?:den|dan|ten|tan))? (?:ucuz[a-z]*|az|asagi[a-z]*|dusuk)/, (m) => maxPrice(Number(m[1])));
-  scan(ctx, /(\d+) (?:alti|altinda|altina|altindaki)/, (m) => maxPrice(Number(m[1])));
+  scan(ctx, /(\d+)(?: (?:in|un))? (?:alti|altinda|altina|altindaki)/, (m) => maxPrice(Number(m[1])));
+  // "5 binin üstünde", "5000 üzeri" (birimsiz; TL'li biçim yukarıda).
+  // Yıl gibi görünen sayı model yılıdır ("2018 üzeri"), aşağıdaki kalıp alır.
+  scan(ctx, /(\d+)(?: (?:in|un))? (?:ustu|uzeri|ustunde|uzerinde|ustundeki|uzerindeki)/, (m) =>
+    !isYear(Number(m[1])) && minPrice(Number(m[1])),
+  );
   scan(ctx, /(\d+)(?: (?:e|a|ye|ya))? kadar/, (m) => maxPrice(Number(m[1])));
   // Bütçe: "bütçem 10 bin", "10 bin bütçem var".
   scan(ctx, /butce[a-z]*(?: (?:var|olarak))? (\d+)|(\d+)(?: (?:tl|lira)[a-z]*)? (?:lik )?butce[a-z]*/, (m) =>
@@ -451,75 +530,170 @@ function first<K extends LexEntry["kind"]>(list: LexEntry[], kind: K) {
  * İlçe kararı il bilindikten SONRA verilir; kullanıcı "Çankaya Ankara" gibi ili
  * sonra da söyleyebilir.
  *
- * Olumsuzlanan konum/kategori/marka ("JCB olmasın", "İstanbul hariç") hiç
- * uygulanmaz: aramada hariç tutma filtresi yok, geniş sonuç ters sonuçtan iyidir.
+ * Her boyut çoklu değer alır. "kepçe veya ekskavatör" iki alt türü birden
+ * seçer; arama kategori/alt kategoriyi hiyerarşik VEYA ile birleştirir.
+ *
+ * Olumsuzlanan ya da çıkarılan konum/kategori/marka ("JCB olmasın",
+ * "İstanbul hariç", "JCB'yi çıkar") seçime girmez, `removed`'a yazılır.
+ * Yeni aramada uygulanmaz (aramada hariç tutma filtresi yok; geniş sonuç ters
+ * sonuçtan iyidir), mevcut filtreleri düzenlerken listeden çıkarılır.
  */
 function resolve(ctx: Ctx, sorted: Match[]): void {
   const f = ctx.filters;
   const lex = lexicon();
-  const deferred: LexEntry[][] = [];
-  // "kepçe veya ekskavatör": aynı kategoriden iki alt tür → alt tür seçilmez,
-  // kategori kalır. Birini seçmek diğerini sessizce dışarıda bırakırdı.
-  let subConflict = false;
+  const deferred: { entries: LexEntry[]; only: boolean }[] = [];
 
-  for (const { entries, end } of sorted) {
-    if (takeNegation(ctx, end)) {
-      ctx.recognized++;
-      continue;
+  // Çıkarma ifadesi bağlaçla bağlı eşleşme zincirinin tamamına uygulanır:
+  // "JCB ve Volvo'yu çıkar". Sondan başa: zincirin son halkası ifadeyi tüketir.
+  const removed = sorted.map(() => false);
+  for (let m = sorted.length - 1; m >= 0; m--) {
+    if (takeRemoval(ctx, sorted[m].end)) {
+      removed[m] = true;
+    } else if (m + 1 < sorted.length && removed[m + 1]) {
+      const between = ctx.tokens.slice(sorted[m].end + 1, sorted[m + 1].start);
+      removed[m] = between.length > 0 && between.every((t) => CONJUNCTIONS.has(t.key));
     }
+  }
+
+  sorted.forEach(({ entries, start }, m) => {
     const il = first(entries, "il");
     const sub = first(entries, "altKategori");
     const cat = first(entries, "kategori");
     const ilce = first(entries, "ilce");
     const brand = first(entries, "marka");
 
+    if (removed[m]) {
+      // Hangi anlamın kastedildiği belli değil; yalnız mevcut seçimde olan
+      // değer çıkarılacağı için hepsini yazmak zararsızdır.
+      if (il) addUnique(f.removed.il, il.value);
+      if (sub) addUnique(f.removed.altKategori, sub.slug);
+      if (cat) addUnique(f.removed.kategori, cat.slug);
+      if (ilce) addUnique(f.removed.ilce, ilce.value);
+      if (brand) addUnique(f.removed.marka, brand.value);
+      ctx.recognized++;
+      return;
+    }
+
+    // "sadece JCB": o boyut mevcut seçime eklenmez, onun yerine geçer.
+    const only = start > 0 && ONLY_WORDS.has(ctx.tokens[start - 1].key);
+
     if (il) {
-      set(f, "il", il.value);
+      addUnique(f.il, il.value);
+      if (only) ctx.only.add("il");
     } else if (sub) {
-      // Alt kategori kategoriyi belirler; önce yalnız kategori söylendiyse
-      // ("vinç … hiyap") daha özel olan kazanır.
-      if (!f.altKategori && !subConflict) {
-        f.altKategori = sub.slug;
-        f.kategori = sub.category;
-      } else if (f.altKategori && f.altKategori !== sub.slug && f.kategori === sub.category) {
-        f.altKategori = undefined;
-        subConflict = true;
-      }
+      addUnique(f.altKategori, sub.slug);
+      addUnique(f.kategori, sub.category);
+      if (only) ctx.only.add("kategori").add("altKategori");
     } else if (cat) {
-      set(f, "kategori", cat.slug);
+      addUnique(f.kategori, cat.slug);
+      if (only) ctx.only.add("kategori").add("altKategori");
     } else if (ilce) {
-      deferred.push(entries);
-      continue;
+      deferred.push({ entries, only });
+      return;
     } else if (brand) {
       addUnique(f.marka, brand.value);
+      if (only) ctx.only.add("marka");
     } else {
-      continue;
+      return;
     }
     ctx.recognized++;
-  }
+  });
 
-  for (const entries of deferred) {
+  // İlçe kararı tüm iller bilindikten SONRA: "Çankaya Ankara" da olur.
+  for (const { entries, only } of deferred) {
     const ilce = first(entries, "ilce")!;
     const brand = first(entries, "marka");
-    if (f.il && ilce.provinces.includes(f.il)) {
-      set(f, "ilce", ilce.value);
+    const named = ilce.provinces.filter((p) => f.il.includes(p));
+    const fromContext = ilce.provinces.filter((p) => ctx.context.il.includes(p));
+    let owners: string[] = [];
+    if (named.length) {
+      owners = named;
+    } else if (fromContext.length) {
+      // "Yenişehir'i de ekle" düzenlenen aramada Bursa seçiliyken: Bursa'nınki.
+      owners = fromContext;
     } else if (
-      !f.il &&
       !brand &&
       ilce.provinces.length === 1 &&
       !lex.commonWordDistricts.has(phraseKey(ilce.value))
     ) {
-      f.il = ilce.provinces[0];
-      f.ilce = ilce.value;
+      owners = ilce.provinces;
     } else if (brand) {
       addUnique(f.marka, brand.value);
+      ctx.recognized++;
+      continue;
     } else {
       // Belirsiz yer adı ("Merkez", birden çok ilde olan ilçe): yok sayılır.
       // Serbest metin aramasına girseydi sonuçları bozardı.
       continue;
     }
+    for (const p of owners) {
+      addUnique(f.il, p);
+      addUnique(f.ilce, scopedDistrict(p, ilce.value));
+    }
+    if (only) ctx.only.add("ilce").add("il");
     ctx.recognized++;
   }
+}
+
+/** Ölçü ve seçenek alanlarının çözüleceği seçim: cümledeki, yoksa bağlamdaki. */
+function specSelection(ctx: Ctx): { cats: string[]; subs: string[] } {
+  const f = ctx.filters;
+  return f.kategori.length
+    ? { cats: f.kategori, subs: f.altKategori }
+    : { cats: ctx.context.kategori, subs: ctx.context.altKategori };
+}
+
+/**
+ * Seçenekli teknik alanlar: "Euro 6 otomatik çekici" → spec_euroNorm=Euro 6,
+ * spec_sanziman=Otomatik. Seçenekler taksonomiden gelir (elle sözlük yok) ve
+ * yalnız TEK kategori seçiliyken aranır — filtre paneli de bu alanları ancak
+ * o zaman gösterir. "Diğer"/"Yok" ve çok kısa seçenekler aranmaz.
+ */
+function resolveOptions(ctx: Ctx): void {
+  const { cats, subs } = specSelection(ctx);
+  if (cats.length !== 1) return;
+  const f = ctx.filters;
+  const fields = specFieldsForSelection(cats, subs).filter((s) => s.type === "select" && s.options?.length);
+  for (const field of fields) {
+    for (const option of field.options!) {
+      const key = phraseKey(option);
+      if (!key || key.replace(/ /g, "").length < 3 || key === "diger" || key === "yok") continue;
+      const words = key.split(" ");
+      for (let i = 0; i + words.length <= ctx.tokens.length; i++) {
+        const span = ctx.tokens.slice(i, i + words.length);
+        if (span.some((_, k) => ctx.used[i + k])) continue;
+        const head = span.slice(0, -1).every((t, k) => t.key === words[k]);
+        const last = stems(span[span.length - 1].key).includes(words[words.length - 1]);
+        if (!head || !last) continue;
+        const cur = f.specs[field.key];
+        if (typeof cur === "number") break;
+        f.specs[field.key] = [...new Set([...(cur ?? []), option])];
+        span.forEach((_, k) => (ctx.used[i + k] = true));
+        ctx.recognized++;
+        break;
+      }
+    }
+  }
+}
+
+/** Düzenleme işaretleri: ekleme ve sıfırlama. Tüketilmemiş belirteçlerde aranır. */
+function detectIntent(ctx: Ctx): RulesIntent {
+  const keys = ctx.tokens.map((t, i) => (ctx.used[i] ? "" : t.key));
+  // "eklemli platform" bir komut değil: yalnız fiil biçimleri.
+  const ADD = /^(?:ekle(?:yin|r|sene|nsin|yelim|yebilir|r misin)?$|ilave|ayrica$|dahil)/;
+  const AFTER_DE = /^(?:olsun|goster|getir|bak|ekle|gelsin|dahil)/;
+  let add = false;
+  let reset = false;
+  keys.forEach((k, i) => {
+    const next = keys[i + 1] ?? "";
+    if (ADD.test(k)) add = true;
+    // "bir de forklift", "Kocaeli de olsun". Yalın "de/da" işaret değildir:
+    // STT "İzmir'de" bulunma ekini de "İzmir de" yazabilir.
+    if (k === "bir" && (next === "de" || next === "da")) add = true;
+    if ((k === "de" || k === "da" || k === "te" || k === "ta") && AFTER_DE.test(next)) add = true;
+    if (/^(?:sifirla|bastan|temizle)/.test(k) || (k === "yeni" && next.startsWith("arama"))) reset = true;
+  });
+  return { add, reset, only: [...ctx.only], removeVerb: ctx.removeVerb };
 }
 
 // ───────── C) Tek kelimelik kalıplar ─────────
@@ -539,13 +713,15 @@ function phaseC(ctx: Ctx): void {
  * Ölçüleri kategorinin filtrelenebilir teknik alanına bağlar.
  * "20 tonluk ekskavatör" → spec_operasyonAgirligi=20,
  * "3 tonluk forklift" → spec_kaldirmaKapasitesi=3000 (alan kg cinsinden).
- * Kategori bilinmiyorsa ölçü atılır: tek başına anlamı yok.
+ * Kategori bilinmiyorsa ya da birden çok kategori seçiliyse ölçü atılır:
+ * teknik alanlar kategoriye özgüdür (filtre paneli de yalnız tek kategoride
+ * gösterir). Alanlar seçili alt türlerin birleşimidir.
  */
 function resolveMeasures(ctx: Ctx): void {
   const f = ctx.filters;
-  const fields = (getCategory(f.kategori)?.specFields ?? []).filter(
-    (s) => s.filterable && s.type === "number",
-  );
+  const { cats, subs } = specSelection(ctx);
+  if (cats.length !== 1) return;
+  const fields = specFieldsForSelection(cats, subs).filter((s) => s.type === "number");
   for (const m of ctx.measures) {
     const candidates = fields
       .map((s) => {
@@ -600,7 +776,9 @@ function modelGroups(leftIdx: number[], word: (i: number) => string): string[] {
   return groups.map((g) => g.join(" "));
 }
 
-export function parseWithRules(text: string): RulesResult {
+const NO_CONTEXT: RulesContext = { kategori: [], altKategori: [], il: [] };
+
+export function parseWithRules(text: string, context: RulesContext = NO_CONTEXT): RulesResult {
   const tokens = tokenize(text);
   const ctx: Ctx = {
     tokens,
@@ -608,6 +786,9 @@ export function parseWithRules(text: string): RulesResult {
     filters: emptyFilters(),
     recognized: 0,
     measures: [],
+    context,
+    only: new Set(),
+    removeVerb: false,
   };
 
   phaseA(ctx);
@@ -617,6 +798,8 @@ export function parseWithRules(text: string): RulesResult {
   const fuzzy = phaseFuzzy(ctx);
   resolve(ctx, [...exact, ...fuzzy].sort((a, b) => a.start - b.start));
   resolveMeasures(ctx);
+  resolveOptions(ctx);
+  const intent = detectIntent(ctx);
 
   const leftIdx = tokens.flatMap((t, i) => (!ctx.used[i] && !isFiller(t.key) ? [i] : []));
   const remainder = leftIdx.map((i) => tokens[i].raw);
@@ -641,5 +824,6 @@ export function parseWithRules(text: string): RulesResult {
     remainder,
     recognized: ctx.recognized,
     confidence: low ? "low" : "high",
+    intent,
   };
 }

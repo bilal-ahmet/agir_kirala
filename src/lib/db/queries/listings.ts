@@ -332,10 +332,10 @@ export const getListingById = cache(async (id: string): Promise<Listing | undefi
 /** Eskiden yerel/tohum ayrımı vardı; artık tek kaynak. */
 export const findAnyListing = getListingById;
 
-/** Bir kategorideki aktif ilan sayısı (kategori grid sayaçları). */
 /**
  * Filtrelere uyan en az bir aktif ilan var mı — sayım yapmadan, tek satır.
- * Sesli aramanın güvenlik ağı kullanır (bkz. core/voice-search → hasResults).
+ * (Arama metni testleri kullanır. Sesli arama bilinçli olarak KULLANMAZ:
+ * söylenen filtre sonuç çıkmıyor diye atılmaz.)
  */
 export async function listingsExist(f: FilterState): Promise<boolean> {
   const rows = await db
@@ -347,6 +347,7 @@ export async function listingsExist(f: FilterState): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** Bir kategorideki aktif ilan sayısı (kategori grid sayaçları). */
 export async function countByCategory(categorySlug: string): Promise<number> {
   const [{ total }] = await db
     .select({ total: sql<number>`count(*)::int` })

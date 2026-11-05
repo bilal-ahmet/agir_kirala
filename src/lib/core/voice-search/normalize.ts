@@ -115,7 +115,8 @@ export function tokenize(text: string): Token[] {
 }
 
 /** Sayıdan ayrılan hâl ekleri. Kalıplar anlamı bunlardan okur ("5 binden ucuz"). */
-const NUMBER_SUFFIXES = ["den", "dan", "ten", "tan", "lik", "luk", "ye", "ya", "e", "a"];
+// "in"/"un": ilgi eki — "10 binin altında", "5 binin üstünde".
+const NUMBER_SUFFIXES = ["den", "dan", "ten", "tan", "lik", "luk", "ye", "ya", "in", "un", "e", "a"];
 
 /**
  * Ekli sayıyı sayı + ek olarak böler: "binden" → "bin" "den", "5000den" →

@@ -229,4 +229,15 @@ export const voiceQuerySchema = z.object({
     .trim()
     .min(1, "Arama metni boş olamaz.")
     .max(200, "Arama metni en fazla 200 karakter olabilir."),
+  /**
+   * Sonuç sayfasındaki mevcut arama parametreleri (GET /listings sorgusuyla
+   * aynı). Verilirse cümle bir düzenleme olabilir ("Kocaeli'yi de ekle",
+   * "JCB'yi çıkar"); verilmezse her cümle yeni aramadır. Tanınmayan anahtarlar
+   * sessizce atılır.
+   */
+  current: z
+    .record(z.string().max(40), z.string().max(1000))
+    .refine((r) => Object.keys(r).length <= 40, "En fazla 40 parametre.")
+    .optional()
+    .describe("Mevcut arama parametreleri (düzenleme için). Örn. { \"il\": \"İstanbul\", \"kategori\": \"hafriyat\" }"),
 });
