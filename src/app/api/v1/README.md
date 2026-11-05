@@ -119,7 +119,7 @@ POST /api/v1/search/parse   { "text": "İstanbul'da operatörlü JCB 3CX kepçe"
 → { "params": { "il": "İstanbul", "operator": "operatorlu", "marka": "JCB",
                 "q": "3CX", "kategori": "hafriyat", "altKategori": "beko-loder" },
     "chips": [{ "param": "il", "value": "İstanbul", "label": "İstanbul" }, …],
-    "remainder": "3CX", "source": "rules", "text": "…" }
+    "remainder": "3CX", "source": "rules", "mode": "new", "text": "…" }
 ```
 
 `params` olduğu gibi `GET /api/v1/listings` sorgusuna eklenir. `chips` sonuç
@@ -128,6 +128,47 @@ anahtarından `value` çıkarılır (çoklu parametrelerde virgüllü listeden),
 parametrelerle arama yeniden yapılır. `kategori` kaldırılırsa `altKategori` ve
 `spec_*` de kaldırılmalı (web filtre paneli de böyle davranır).
 
+**Çoklu değer:** her boyut birden çok değer alır, filtre paneliyle aynı
+kurallarla. "Ankara Çankaya ve İzmir'de kepçe ya da forklift" →
+`il=Ankara,İzmir&ilce=Ankara/Çankaya&kategori=hafriyat,forklift&altKategori=beko-loder`.
+`ilce` her zaman **`İl/İlçe`** biçimindedir. Çıktı web panelinin budama
+kurallarından geçer (`src/lib/filter-selection.ts`): alt kategori yalnız
+seçili kategoriden, `spec_*` yalnız tek kategori seçiliyken. Marka
+budanmaz: kategorinin listesinde olmasa da söylenen marka aranır ("Scania
+forklift" → `kategori=forklift&marka=Scania`); istemci filtre ekranında bu
+markayı seçili olarak göstermeli ki kullanıcı kaldırabilsin. Seçenekli teknik özellikler de tanınır ("Euro 6 otomatik çekici" →
+`spec_euroNorm=Euro 6&spec_sanziman=Otomatik`); çipi "Emisyon Normu: Euro 6".
+Birden çok il varken ilçe çipinin etiketi "Çankaya (Ankara)" olur.
+
+**Düzenleme modu:** sonuç ekranındaki mikrofon mevcut sorgu parametrelerini
+`current` olarak gönderir (`sayfa` hariç). Cümle bir düzenleme ise o
+parametreler değiştirilir:
+
+```
+POST /api/v1/search/parse
+  { "text": "Kocaeli'yi de ekle, JCB olmasın",
+    "current": { "il": "İstanbul", "kategori": "hafriyat", "marka": "JCB,Hidromek" } }
+→ { "mode": "refine",
+    "params": { "il": "İstanbul,Kocaeli", "kategori": "hafriyat", "marka": "Hidromek" },
+    "changes": { "added":   [{ "param": "il", "value": "Kocaeli", "label": "Kocaeli" }],
+                 "removed": [{ "param": "marka", "value": "JCB", "label": "JCB" }] }, … }
+```
+
+- Ekleme: "… de ekle", "bir de …", "… de olsun", "ayrıca". Çıkarma: "… çıkar /
+  kaldır / sil", "… olmasın / hariç", "X yerine Y". Değiştirme: "sadece …".
+  Yalnız niteleyici söylenirse de düzenlemedir ("operatörlü olsun", "10 binin
+  altında olsun", "en ucuza göre sırala"). "Yeni arama …", "baştan …" yeni
+  aramadır; "filtreleri temizle" boş küme döndürür (`mode: refine`).
+- Cümle yeni bir makine/yer/marka söylüyorsa ("Ankara'da forklift") yeni
+  aramadır (`mode: new`, `changes` yok).
+- `params` her iki modda da **tam küme**dir; istemci birleştirme yapmaz, sorguyu
+  bununla değiştirir. Sesin modellemediği mevcut parametreler (ör. `fotografli`)
+  düzenlemede korunur.
+- `mode: refine` ve `params` boşsa tüm filtreler kaldırılmıştır: filtresiz
+  listeye gidilir. `changes` boşsa hiçbir şey değişmemiştir: "değişiklik
+  olmadı" gösterilir.
+- `current` gönderilmezse davranış eskisiyle aynıdır (her cümle yeni arama).
+
 Anlaşılmayan cümle hata değildir: `params` boş döner, istemci "anlayamadım"
 gösterir. 400 yalnız boş ya da 200 karakterden uzun metinde döner.
 
@@ -135,9 +176,11 @@ gösterir. 400 yalnız boş ya da 200 karakterden uzun metinde döner.
 ~1 ms). Kural motoru olumsuzluğu ("JCB olmasın", "nakliye istemiyorum"), fiyat
 ve yıl aralıklarını ("10 bin ile 20 bin arası", "2015 öncesi" → `maxYil`),
 komut/dolgu kelimelerini ve konuşma tanıma yazım hatalarını ("forkilift",
-"jenaratör") tanır. Filtrelerin yanında model kodu olmayan bir `q` kalırsa
-sunucu tek satırlık bir sorguyla o `q`'nun sonuç verip vermediğine bakar;
-vermiyorsa `q` atılır (sızan tek kelime boş sonuç ekranı demekti). Anlaşılmayan anlamlı kelime kalırsa ve `ANTHROPIC_API_KEY` tanımlıysa
+"jenaratör") tanır. **Söylenen hiçbir filtre, sonuç çıkmıyor diye atılmaz:**
+sözlüğe uymayan anlamlı kelimeler `q` olarak aranır, uygun ilan yoksa istemci
+boş sonuç ekranını ("uygun ilan yok") filtre çipleriyle birlikte gösterir;
+kullanıcı istediği çipi kendisi kaldırır. Sunucu bu uç için DB'ye gitmez.
+Anlaşılmayan anlamlı kelime kalırsa ve `ANTHROPIC_API_KEY` tanımlıysa
 Claude Haiku yedeği denenir (`source: "llm"`). LLM'in çıktısı taksonomiden
 üretilen enum'larla kilitlidir; hata/zaman aşımında sessizce sözlük sonucuna
 düşülür. Hız sınırı (`voice`, IP başına 20/dk) yalnız LLM yoluna uygulanır.
@@ -152,6 +195,14 @@ düşülür. Hız sınırı (`voice`, IP başına 20/dk) yalnız LLM yoluna uygu
   `<queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>`.
 - Cihazda Türkçe tanıma yoksa (`locales()` içinde `tr_TR` yok) mikrofon düğmesi gizlenmeli.
 - Mikrofon ekranında web'deki bilgilendirmenin karşılığı gösterilmeli (aşağıda).
+- Sonuç ekranındaki mikrofon `current` göndermeli; ana sayfadaki göndermez.
+  Yanıttaki `params` filtre durumuna açılırken virgüllü değerler listeye,
+  `ilce` değerleri `İl/İlçe` olarak (filtre ekranındaki ilçe seçimiyle aynı
+  biçim) alınmalı. `mode: refine` ise panelde `changes` gösterilir
+  ("+ Kocaeli", "− JCB"), değilse `chips`. `source: llm` ise küçük bir
+  "Yapay zekâ ile yorumlandı" notu gösterilir.
+- Sonuç boşsa filtreler sessizce gevşetilmez: "Aradığınız kriterlere uygun
+  ilan yok" mesajı ve kaldırılabilir filtre çipleri gösterilir (web ile aynı).
 
 **Gizlilik:** Projede henüz bir gizlilik politikası sayfası yok. Web'de
 bilgilendirme, verinin toplandığı yerde, sesli arama panelinde gösteriliyor.

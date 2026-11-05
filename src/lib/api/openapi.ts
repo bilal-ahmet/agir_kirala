@@ -469,7 +469,7 @@ const ENDPOINTS: Endpoint[] = [
   { method: "delete", path: "/me/sessions/{id}", id: "revokeSession", summary: "Uzaktan oturum kapatma.", auth: true, params: ["id"], status: 204 },
   { method: "get", path: "/me/badges", id: "getBadges", summary: "Bekleyen talep + okunmamış sohbet sayısı.", auth: true, response: ref("Badges") },
 
-  { method: "post", path: "/search/parse", id: "parseVoiceSearch", summary: "Sesli arama: cihazda metne çevrilmiş cümleyi arama filtrelerine çevirir (ör. \"İstanbul'da operatörlü JCB kepçe\"). Dönen params olduğu gibi GET /listings sorgusuna eklenir.", auth: false, request: voiceQuerySchema, response: ref("VoiceSearchResult"), responseNote: "Anlaşılmayan cümle hata değildir: params boş döner." },
+  { method: "post", path: "/search/parse", id: "parseVoiceSearch", summary: "Sesli arama: cihazda metne çevrilmiş cümleyi arama filtrelerine çevirir (ör. \"Ankara ve İzmir'de operatörlü kepçe ya da forklift\"). Sonuç ekranından current (mevcut sorgu parametreleri) gönderilirse cümle onları düzenleyebilir (\"Kocaeli'yi de ekle\", \"JCB'yi çıkar\"). Dönen params TAM kümedir ve olduğu gibi GET /listings sorgusuna eklenir.", auth: false, request: voiceQuerySchema, response: ref("VoiceSearchResult"), responseNote: "Anlaşılmayan cümle hata değildir: params boş döner." },
   { method: "get", path: "/listings", id: "searchListings", summary: "İlan arama. Filtre parametreleri web ile aynı (q, kategori, marka, il, sayfa, spec_*).", auth: false, query: true, response: ref("ListingPage"), responseNote: "12 ilan/sayfa." },
   { method: "post", path: "/listings", id: "createListing", summary: "İlan oluşturma.", auth: true, request: createListingSchema, response: ref("CreatedId"), status: 201 },
   { method: "get", path: "/listings/{id}", id: "getListing", summary: "İlan detayı. Aktif olmayan ilan yalnız sahibine açılır, diğerlerine 404.", auth: false, params: ["id"], response: ref("ListingDetail") },
@@ -691,7 +691,7 @@ export function buildOpenApiDocument(): Json {
               type: "object",
               additionalProperties: { type: "string" },
               description:
-                "GET /listings sorgu parametreleri (q, kategori, altKategori, il, ilce, marka, periyot, operator, nakliye, durum, yakit, minFiyat, maxFiyat, minYil, sirala, spec_*). Çoklu değerler virgülle ayrılır.",
+                "GET /listings sorgu parametreleri — her iki modda da TAM küme (q, kategori, altKategori, il, ilce, marka, periyot, operator, nakliye, durum, yakit, minFiyat, maxFiyat, minYil, maxYil, sirala, spec_*; refine'da sesin modellemediği mevcut parametreler de korunur). Çoklu değerler virgülle ayrılır; ilce \"İl/İlçe\" biçimindedir (ör. Ankara/Çankaya).",
             },
             chips: arrayOf(ref("VoiceChip")),
             remainder: { type: "string", description: "Hiçbir filtreye dönüşmeyen kelimeler (bilgi amaçlı)." },
@@ -700,8 +700,19 @@ export function buildOpenApiDocument(): Json {
               enum: ["rules", "llm"],
               description: "rules: sözlük eşleme. llm: serbest cümle için LLM yedeği de kullanıldı.",
             },
+            mode: {
+              type: "string",
+              enum: ["new", "refine"],
+              description:
+                "new: yeni arama. refine: istekteki current filtreleri düzenlendi (\"Kocaeli'yi de ekle\", \"JCB'yi çıkar\"). current gönderilmediyse her zaman new.",
+            },
+            changes: {
+              ...obj({ added: arrayOf(ref("VoiceChip")), removed: arrayOf(ref("VoiceChip")) }, ["added", "removed"]),
+              description:
+                "Yalnız refine'da: current'a göre eklenen ve çıkarılan parçalar (kullanıcıya \"+ Kocaeli · − JCB\" diye gösterilir).",
+            },
           },
-          ["text", "params", "chips", "remainder", "source"],
+          ["text", "params", "chips", "remainder", "source", "mode"],
         ),
         VoiceChip: obj(
           {
