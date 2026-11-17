@@ -172,6 +172,15 @@ export interface ListingPhoto {
   url: string;
   /** 400 px WebP küçük boy. Eski kayıtlarda yok — tüketici url'e düşer. */
   thumbUrl?: string;
+  /** Dış kaynaklı (Unsplash) görselde fotoğrafçı atfı; gösterilmesi lisans gereği zorunlu. */
+  credit?: PhotoCredit;
+}
+
+export interface PhotoCredit {
+  /** Fotoğrafçının adı */
+  name: string;
+  /** Fotoğrafçının Unsplash profil linki (utm parametreli) */
+  url: string;
 }
 
 export interface RentalRequest {

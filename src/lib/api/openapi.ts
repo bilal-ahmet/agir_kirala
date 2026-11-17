@@ -69,6 +69,15 @@ const photoSchema = z.object({
   id: z.string(),
   thumb: z.string().describe("400 px WebP. Küçük boy yoksa orijinale düşer — asla null değildir."),
   original: z.string().describe("1600 px'e sığdırılmış WebP."),
+  credit: z
+    .object({
+      name: z.string().describe("Fotoğrafçının adı"),
+      url: z.string().describe("Fotoğrafçının Unsplash profil linki"),
+    })
+    .optional()
+    .describe(
+      "Yalnız Unsplash kaynaklı görsellerde. Görsel gösterildiği yerde 'Fotoğraf: {name} / Unsplash' atfı linkli gösterilmelidir (lisans şartı).",
+    ),
 });
 
 const listingSchema = z

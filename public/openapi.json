@@ -483,6 +483,24 @@
           "original": {
             "type": "string",
             "description": "1600 px'e sığdırılmış WebP."
+          },
+          "credit": {
+            "description": "Yalnız Unsplash kaynaklı görsellerde. Görsel gösterildiği yerde 'Fotoğraf: {name} / Unsplash' atfı linkli gösterilmelidir (lisans şartı).",
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Fotoğrafçının adı"
+              },
+              "url": {
+                "type": "string",
+                "description": "Fotoğrafçının Unsplash profil linki"
+              }
+            },
+            "required": [
+              "name",
+              "url"
+            ]
           }
         },
         "required": [

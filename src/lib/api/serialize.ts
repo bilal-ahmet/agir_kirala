@@ -14,7 +14,8 @@ import type { Conversation, Listing, RentalRequest, User } from "../types";
  *
  * FOTOĞRAF: `{ id, thumb, original }`. `thumb` ASLA null değildir — küçük boyu
  * olmayan eski satırlarda orijinale düşer. Böylece istemcinin fallback yazması
- * gerekmez.
+ * gerekmez. Unsplash kaynaklı görsellerde `credit` dolu gelir; istemci görseli
+ * gösterdiği yerde "Fotoğraf: {name} / Unsplash" atfını linkli göstermelidir.
  */
 
 export interface ApiPhoto {
@@ -23,6 +24,8 @@ export interface ApiPhoto {
   thumb: string;
   /** 1600 px'e sığdırılmış WebP (eski kayıtlarda ham yükleme olabilir). */
   original: string;
+  /** Dış kaynaklı (Unsplash) görselde fotoğrafçı atfı. Kendi yüklemelerde yok. */
+  credit?: { name: string; url: string };
 }
 
 export interface ApiListing extends Omit<Listing, "photos" | "ownerRating"> {
@@ -38,6 +41,7 @@ export function serializeListing(listing: Listing): ApiListing {
       id: p.id,
       thumb: p.thumbUrl ?? p.url,
       original: p.url,
+      ...(p.credit ? { credit: p.credit } : {}),
     })),
     ownerRating: ownerRating != null ? ownerRating.toFixed(1) : undefined,
   };

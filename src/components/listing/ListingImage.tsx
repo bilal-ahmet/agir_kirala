@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { cn } from "@/lib/cn";
+import { isUnsplashUrl, unsplashSized } from "@/lib/unsplash";
 
 // Fotoğraf yoksa tasarlanmış placeholder: photoSeed'e göre çelik tonlu gradyan + grid dokusu.
 
@@ -52,6 +53,17 @@ export function ListingImage({
             src={photoUrl}
             alt={label ?? ""}
             className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : isUnsplashUrl(photoUrl) ? (
+          // Unsplash kuralı: hotlink. Optimizer'dan geçirmeden, boyutlandırmayı
+          // Unsplash CDN'ine bırak (src/lib/unsplash.ts).
+          <Image
+            src={unsplashSized(photoUrl, width ?? 800)}
+            alt={label ?? ""}
+            fill
+            unoptimized
+            priority={priority}
+            className="object-cover"
           />
         ) : (
           // next/image: Vercel'in görsel optimizasyonu ile otomatik boyutlandırma

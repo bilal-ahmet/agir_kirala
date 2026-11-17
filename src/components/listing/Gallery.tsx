@@ -4,6 +4,8 @@ import { useState } from "react";
 import { ListingImage } from "./ListingImage";
 import { FavoriteButton } from "./FavoriteButton";
 import { cn } from "@/lib/cn";
+import type { PhotoCredit } from "@/lib/types";
+import { UNSPLASH_HOME } from "@/lib/unsplash";
 
 interface GalleryProps {
   id: string;
@@ -11,18 +13,25 @@ interface GalleryProps {
   count: number;
   label?: string;
   /** Gerçek yüklenmiş görseller (varsa placeholder yerine kullanılır). */
-  photos?: { url: string }[];
+  photos?: { url: string; credit?: PhotoCredit }[];
   /** Yüklenmiş tanıtım videosu (varsa şeridin ilk öğesi olur). */
   videoUrl?: string;
 }
 
-type GalleryItem = { kind: "video"; url: string } | { kind: "photo"; seed: number; url?: string };
+type GalleryItem =
+  | { kind: "video"; url: string }
+  | { kind: "photo"; seed: number; url?: string; credit?: PhotoCredit };
 
 export function Gallery({ id, baseSeed, count, label, photos, videoUrl }: GalleryProps) {
   // Gerçek foto varsa onları, yoksa placeholder tohumlarını kullan.
   const photoItems: GalleryItem[] =
     photos && photos.length
-      ? photos.map((p, i) => ({ kind: "photo" as const, seed: baseSeed + i, url: p.url }))
+      ? photos.map((p, i) => ({
+          kind: "photo" as const,
+          seed: baseSeed + i,
+          url: p.url,
+          credit: p.credit,
+        }))
       : Array.from({ length: Math.max(count, 1) }, (_, i) => ({
           kind: "photo" as const,
           seed: baseSeed + i,
@@ -64,6 +73,30 @@ export function Gallery({ id, baseSeed, count, label, photos, videoUrl }: Galler
         )}
         <FavoriteButton id={id} className="absolute right-3 top-3" size={20} />
       </div>
+
+      {/* Unsplash lisansı: fotoğrafçı + Unsplash linkli atıf, görselin hemen altında. */}
+      {current.kind === "photo" && current.credit && (
+        <p className="mt-1.5 text-right text-xs text-faint">
+          Fotoğraf:{" "}
+          <a
+            href={current.credit.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-2 hover:text-fg hover:underline"
+          >
+            {current.credit.name}
+          </a>{" "}
+          /{" "}
+          <a
+            href={UNSPLASH_HOME}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-2 hover:text-fg hover:underline"
+          >
+            Unsplash
+          </a>
+        </p>
+      )}
 
       {items.length > 1 && (
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">

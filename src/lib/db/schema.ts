@@ -148,6 +148,11 @@ export const listingPhotos = pgTable(
     // eski satırlar bozulmaz, serializer thumb için url'e düşer (thumbUrl ?? url).
     thumbUrl: text("thumb_url"),
     thumbStoragePath: text("thumb_storage_path"),
+    // Unsplash gibi dış kaynaklı (hotlink) görseller: Storage'da dosya yoktur
+    // (storage_path ''), fotoğrafçı adı + linki atıf için zorunludur. Kendi
+    // yüklemelerimizde ikisi de NULL.
+    creditName: text("credit_name"),
+    creditUrl: text("credit_url"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
