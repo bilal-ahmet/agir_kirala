@@ -5,7 +5,8 @@
  * Buraya yalnız metin gelir; anlama işi sunucuda tek yerde durur ki web ve
  * mobil aynı sonucu versin ve eş anlamlı eklemek mağaza güncellemesi istemesin.
  *
- * Akış: kurallar (bedava, anında) → gerekirse LLM yedeği → URL parametreleri.
+ * Akış (VoiceEngine): "llm" → her cümle LLM'den, kurallar yalnız yedek;
+ * "hybrid" → kurallar (bedava, anında) → gerekirse LLM → URL parametreleri.
  * Çıktı mevcut arama sözleşmesine (parseFilters) karşı süzülür ve filtre
  * panelinin budama kurallarından (filter-selection.ts) geçer: bu katman yeni
  * bir arama motoru değil, mevcut filtrelerin sesli kısayoludur.
@@ -40,9 +41,27 @@ export type { VoiceChip, VoiceParseResult } from "./types";
 
 export { voiceQuerySchema };
 
+/**
+ * Cümleyi kim anlamlandırır.
+ * - "llm": her cümle yalnız LLM'den geçer. Kural motoru yalnız LLM
+ *   kullanılamazsa (anahtar yok, hız sınırı, hata, zaman aşımı) yedektir.
+ * - "hybrid": önce kurallar (bedava, anında); LLM yalnız kurallar cümleyi
+ *   anlayamadığında. Önceki varsayılan davranış.
+ * Varsayılan "llm"; VOICE_SEARCH_ENGINE=hybrid ile kod değişmeden geri dönülür.
+ */
+export type VoiceEngine = "llm" | "hybrid";
+
+function defaultEngine(): VoiceEngine {
+  return process.env.VOICE_SEARCH_ENGINE === "hybrid" ? "hybrid" : "llm";
+}
+
+const NO_INTENT: Pick<RulesIntent, "add" | "only"> = { add: false, only: [] };
+
 export interface VoiceParseOptions {
+  /** Verilmezse VOICE_SEARCH_ENGINE (varsayılan "llm"). */
+  engine?: VoiceEngine;
   /**
-   * LLM yedeğine girmeden hemen önce çağrılır (hız sınırı burada uygulanır).
+   * LLM'e gitmeden hemen önce çağrılır (hız sınırı burada uygulanır).
    * Fırlatırsa LLM atlanır ve kural sonucu döner — arama yine çalışır.
    * Kural yolu bu kancayı hiç çağırmaz: bedava yol DB round-trip'i ödemez.
    */
@@ -91,20 +110,37 @@ export async function parseVoiceQuery(
   );
   let mode = decideMode(rules, hasCurrent);
   // "Filtreleri temizle" de bir düzenlemedir ama tabanı boştur.
-  const keepCurrent = () => mode === "refine" && !rules.intent.reset;
+  let reset = rules.intent.reset;
+  const keepCurrent = () => mode === "refine" && !reset;
   let base = keepCurrent() ? currentFilters : emptyFilters();
   let ops = rules.filters;
+  let intent: Pick<RulesIntent, "add" | "only"> = rules.intent;
+  let remainder = rules.remainder.join(" ");
   let source: VoiceParseResult["source"] = "rules";
 
+  const engine = options.engine ?? defaultEngine();
   const useLlm = options.llm !== false && (options.llmDeps?.client || llmEnabled());
-  if (useLlm && rules.confidence === "low") {
+  if (useLlm && (engine === "llm" || rules.confidence === "low")) {
     let allowed = true;
     try {
       await options.beforeLlm?.();
     } catch {
       allowed = false;
     }
-    if (allowed) {
+    if (allowed && engine === "llm") {
+      // Kural sonucu modele "doğru" diye verilmez: kurallar yalnız yedek.
+      const llm = await parseWithLlm(text, emptyFilters(), options.llmDeps, hasCurrent ? currentFilters : undefined);
+      if (llm) {
+        source = "llm";
+        mode = hasCurrent ? llm.mode : "new";
+        // Model düzenlemede tam kümeyi yazar; boş küme "filtreleri temizle"dir.
+        reset = mode === "refine" && !hasAnyFilter(llm.filters);
+        base = llm.filters;
+        ops = emptyFilters();
+        intent = NO_INTENT;
+        remainder = "";
+      }
+    } else if (allowed) {
       const llm = await parseWithLlm(text, rules.filters, options.llmDeps, hasCurrent ? currentFilters : undefined);
       if (llm) {
         source = "llm";
@@ -113,8 +149,6 @@ export async function parseVoiceQuery(
         // LLM tam kümeyi verir (düzenlemede mevcut filtreler dahil); kural
         // sonucu üstüne uygulanır ki kesin eşleşmeler kaybolmasın.
         base = llm.filters;
-        // LLM teknik özellik yazmaz; düzenlemede mevcutlar korunur.
-        if (keepCurrent()) base.specs = { ...currentFilters.specs };
         // Sözlük 81 ilin tamamını tanır: kurallar il bulduysa LLM'in fazladan
         // eklediği il büyük olasılıkla hatadır. (Makine türünde öyle değil:
         // "toprak kazacak bir şey ya da forklift" → LLM hafriyatı haklı ekler.)
@@ -127,7 +161,7 @@ export async function parseVoiceQuery(
     }
   }
 
-  const merged = applyOps(base, ops, rules.intent);
+  const merged = applyOps(base, ops, intent);
   const params = sanitize({
     // Sesin modellemediği filtreler (fotoğraflı, satıcı tipi…) düzenlemede korunur.
     ...(keepCurrent() ? Object.fromEntries(Object.entries(current).filter(([k]) => !isVoiceKey(k))) : {}),
@@ -139,7 +173,7 @@ export async function parseVoiceQuery(
     text,
     params,
     chips,
-    remainder: rules.remainder.join(" "),
+    remainder,
     source,
     mode,
     ...(mode === "refine" ? { changes: diffChips(toChips(current), chips) } : {}),

@@ -27,7 +27,7 @@ export type LexEntry =
  * Belirsiz gündelik adlar (ör. "silindir": asfalt mı toprak mı) kategori
  * düzeyine bağlanır; kullanıcı alt türü filtre panelinden daraltır.
  */
-const SYNONYMS: Record<string, string[]> = {
+export const SYNONYMS: Record<string, string[]> = {
   hafriyat: ["hafriyat", "hafriyat makine", "toprak isi", "kazi makine"],
   "hafriyat/beko-loder": ["kepce", "beko", "bekoloder", "beko loder", "kazici yukleyici"],
   "hafriyat/lastikli-yukleyici": ["loder", "loader", "lastikli loder", "yukleyici", "lastikli kepce"],
@@ -100,7 +100,7 @@ const SYNONYMS: Record<string, string[]> = {
 };
 
 /** Markaların söyleniş/STT biçimleri. Değer, ALL_BRANDS'teki yazımdır. */
-const BRAND_ALIASES: Record<string, string[]> = {
+export const BRAND_ALIASES: Record<string, string[]> = {
   JCB: ["jisibi", "jesibi", "cicibi", "ce ce be", "jey si bi"],
   Caterpillar: ["cat", "katerpilar", "katerpiller", "caterpiler"],
   Hidromek: ["hidromak"],

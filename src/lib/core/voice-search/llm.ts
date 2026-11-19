@@ -1,13 +1,16 @@
 import "server-only";
 
 /**
- * LLM yedeği — yalnız kural motoru cümleyi anlayamadığında çağrılır.
+ * LLM ayrıştırıcı. İki kullanım (bkz. index.ts → VoiceEngine):
+ * - "llm" (varsayılan): her cümle yalnız buradan anlamlandırılır; kural
+ *   motoru yalnız LLM yanıt veremezse yedektir.
+ * - "hybrid": önce kurallar; LLM yalnız kurallar cümleyi anlayamadığında.
  *
- * Neden yalnız yedek: aramaların büyük çoğunluğu ("Ankara'da kepçe") sözlükle
- * bedava ve anında çözülür. LLM, "yarın şantiyede toprak kazacak büyükçe bir
- * makine lazım" gibi serbest cümleler içindir. Haiku seçildi: kullanıcı
- * bekliyor; düşünme kapalı ve düşük efor ile yanıt ~1 sn. Daha büyük
- * modellerde düşünme kapatılamıyor, gecikme kural sonucundan kötü olurdu.
+ * Haiku seçildi: kullanıcı bekliyor; düşünme kapalı ve düşük efor ile yanıt
+ * ~1–2 sn. Daha büyük modellerde düşünme kapatılamıyor, gecikme artardı.
+ *
+ * Konuşma tanıma hatalarına karşı modele sözlüğün gündelik adları ve
+ * markaların söyleniş biçimleri (lexicon.ts) de verilir: tek kaynak orası.
  *
  * Güvenlik/doğruluk: çıktı şeması taksonominin kendisinden üretilen enum'larla
  * kilitlidir; model sözlükte olmayan bir kategori, il veya marka UYDURAMAZ.
@@ -26,13 +29,18 @@ import { z } from "zod";
 import { ALL_BRANDS } from "../../brands";
 import { CATEGORIES } from "../../categories";
 import { FUEL_LABELS, MAX_YEAR, PERIODS, SORT_OPTIONS } from "../../constants";
+import { specFieldsForSelection } from "../../filter-selection";
 import { PROVINCES, districtsOf, parseDistrict, scopedDistrict } from "../../locations";
 import type { FuelType, RentalPeriod, SortKey } from "../../types";
+import { BRAND_ALIASES, SYNONYMS } from "./lexicon";
 import { emptyFilters, type VoiceFilters } from "./types";
 
 const MODEL = "claude-haiku-5-5";
-/** Sesli aramada kullanıcı bekliyor: yavaş yanıt kural sonucundan kötüdür. */
-const TIMEOUT_MS = 4000;
+/**
+ * Kullanıcı bekliyor. Aşılırsa kural sonucuna düşülür; LLM birincil yol
+ * olduğu için ilk (soğuk) isteklere de pay bırakılır.
+ */
+const TIMEOUT_MS = 6000;
 
 const SUB_KEYS = CATEGORIES.flatMap((c) => c.subcategories.map((s) => `${c.slug}/${s.slug}`));
 const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
@@ -43,6 +51,11 @@ const SORT_VALUES = SORT_OPTIONS.map((s) => s.value);
 
 const brandSet = new Set(ALL_BRANDS);
 const subSet = new Set(SUB_KEYS);
+
+/** Filtrelenebilir teknik alanlar; anahtarlar kategoriler arasında ortak olabilir (tonaj, motorGucu). */
+const SPEC_KEYS = [
+  ...new Set(CATEGORIES.flatMap((c) => c.specFields.filter((f) => f.filterable).map((f) => f.key))),
+];
 
 type Tuple = [string, ...string[]];
 
@@ -75,6 +88,15 @@ const outputSchema = z.object({
   minYil: z.number().describe("En eski model yılı, yoksa 0."),
   maxYil: z.number().describe("En yeni model yılı, yoksa 0."),
   sirala: z.enum(["", ...SORT_VALUES] as Tuple),
+  teknik: z
+    .array(
+      z.object({
+        alan: z.enum(SPEC_KEYS as Tuple),
+        sayi: z.number().describe("Sayı alanında en az değer (alanın biriminde); evet/hayır alanında 1; seçenekli alanda 0."),
+        secenekler: z.array(z.string()).describe("Seçenekli alanda listedeki yazımla seçenekler; diğerlerinde []."),
+      }),
+    )
+    .describe("Teknik özellikler; yalnız TEK kategori seçiliyken ve söylendiyse. Yoksa []."),
 });
 
 type LlmOutput = z.infer<typeof outputSchema>;
@@ -89,31 +111,90 @@ const SUB_LIST = CATEGORIES.map(
     `${c.slug} (${c.name}): ` + c.subcategories.map((s) => `${c.slug}/${s.slug} = ${s.name}`).join("; "),
 ).join("\n");
 
+/** "hafriyat/beko-loder: kepce, beko, …" — insanların makinelere gündelik seslenişi. */
+const SYNONYM_LIST = Object.entries(SYNONYMS)
+  .map(([key, words]) => `${key}: ${words.join(", ")}`)
+  .join("\n");
+
+const BRAND_ALIAS_LIST = Object.entries(BRAND_ALIASES)
+  .map(([brand, words]) => `${brand}: ${words.join(", ")}`)
+  .join("\n");
+
+const SPEC_LIST = CATEGORIES.map((c) => {
+  const fields = c.specFields
+    .filter((f) => f.filterable)
+    .map((f) => {
+      const kind =
+        f.type === "number"
+          ? `sayı, ${f.unit ?? "birimsiz"}`
+          : f.type === "select"
+            ? `seçenek: ${f.options?.join(" | ")}`
+            : "evet/hayır";
+      const only = f.subcategories ? ` [yalnız ${f.subcategories.join(", ")}]` : "";
+      return `${f.key} (${f.label}; ${kind})${only}`;
+    });
+  return fields.length ? `${c.slug}: ${fields.join("; ")}` : "";
+})
+  .filter(Boolean)
+  .join("\n");
+
+const LABELS = [
+  `periyot: ${PERIODS.map((p) => `${p.value}=${p.label}`).join(", ")}`,
+  `yakit: ${Object.entries(FUEL_LABELS).map(([k, v]) => `${k}=${v}`).join(", ")}`,
+  `sirala: ${SORT_OPTIONS.filter((s) => s.value !== "onerilen").map((s) => `${s.value}=${s.label}`).join(", ")}`,
+].join("\n");
+
 const SYSTEM = `Bir ağır vasıta ve iş makinesi kiralama sitesinin sesli arama ayrıştırıcısısın.
-Girdi, kullanıcının konuşmasından otomatik metne çevrilmiş Türkçe bir arama cümlesidir.
+Girdi, kullanıcının konuşmasından tarayıcının otomatik metne çevirdiği Türkçe bir arama cümlesidir.
 Görevin cümleyi sitenin arama filtrelerine çevirmek.
 
+Konuşma tanıma:
+- Metin hatalıdır: hızlı konuşmada kelimeler başka gerçek kelimelere dönüşür ("operatörlü olsun" → "Recep Bey olsun", "JCB" → "jisibi", "ekskavatör" → "eskavatör"). Kelimeyi yazıldığı gibi değil, sesçe en yakın ve bu sitede anlamlı olan karşılığıyla oku.
+- Sesçe hiçbir filtreye yakın olmayan, konuyla ilgisiz kelimeleri (dolgu, selamlaşma, kişi adları, anlamsız kelimeler) yok say; q'ya da yazma.
+- Bir kelimenin hangi filtre olduğundan emin değilsen onu yazma: yanlış filtre, eksik filtreden kötüdür.
+
 Kurallar:
-- Konuşma tanıma hataları olabilir ("eskavatör", "katerpilar", "jisibi"); en olası anlamı seç.
-- Yalnız cümlede söylenen ya da açıkça ima edilen filtreleri doldur. Emin değilsen boş bırak.
-- Makinenin yaptığı işi tarif eden cümlelerde ("toprak kazacak makine", "yük kaldıracak") uygun türü seç.
+- Yalnız cümlede söylenen ya da açıkça ima edilen filtreleri doldur.
+- Makinenin adı söylenmeyip yaptığı iş tarif edildiyse ("toprak kazacağız", "yük kaldıracak") yalnız uygun kategoriyi yaz, alt tür yazma. Alt türü yalnız makinenin adı ya da gündelik adı söylendiğinde yaz ("kepçe" → beko-loder, "ekskavatör" → paletli-ekskavator); model kodundan ("3CX", "PC210") alt tür ya da kategori tahmin etme, kodu q'ya yaz.
 - Her filtre birden çok değer alabilir: birden çok il, ilçe, makine türü ya da marka söylenirse hepsini yaz ("Ankara ve İzmir", "kepçe ya da forklift").
 - Alt kategori yazarsan onun kategorisini kategori listesine de yaz. Bir kategorinin yalnız bazı alt türleri istendiyse yalnız onları yaz; kategorinin tamamı istendiyse alt tür yazma.
-- İlçeyi "İl/İlçe" biçiminde yaz ve ilini il listesine de ekle.
-- "Zaten bulunanlar" verilen değerler doğrudur; onları aynen koru ve yalnız eksikleri tamamla.
-- "olmasın", "hariç", "çıkar" denen değerleri yazma; aramada hariç tutma yok.
-- q yalnız model kodu ya da filtrelere sığmayan kısa bir anahtar kelime içindir; cümlenin tamamını yazma.
+- İlçeyi "İl/İlçe" biçiminde yaz ve ilini il listesine de ekle. Gündelik bir kelime ancak il ile birlikte söylendiyse ilçedir.
+- "Zaten bulunanlar" verilirse o değerler doğrudur; onları aynen koru ve yalnız eksikleri tamamla.
+- Yeni aramada "olmasın", "hariç", "istemiyorum" denen değerleri yazma; aramada hariç tutma yok.
+- Operatör: "operatörlü", "şoförlü", "operatörüyle" → operatorlu; "operatörsüz", "sadece makine" → operatorsuz.
+- Nakliye: "nakliye dahil", "getirip götürsün" → var; "nakliyesiz" → yok. "Nakliye için tır" bir tır aramasıdır, nakliye filtresi değil.
+- Durum: "sıfır", "yeni makine" → sifir; "ikinci el" → ikinci_el.
+- Fiyat TL'dir: "10 bin liraya kadar", "en fazla 10 bin" → maxFiyat=10000; "en az 5 bin" → minFiyat=5000. "Ucuz" gibi sayısız ifadeler fiyat değildir, gerekiyorsa sirala=fiyat-artan.
+- Model yılı: "2018 ve sonrası", "2018'den yeni" → minYil=2018; "2015 öncesi", "2015'ten eski" → maxYil=2015.
+- Süre: "günlük", "bir haftalığına", "aylık", "sefer başı" → periyot.
+- Teknik: "20 tonluk ekskavatör" → teknik=[{alan: operasyonAgirligi, sayi: 20}]. Birimi alanın birimine çevir ("3 tonluk forklift", alan kg ise → 3000). Teknik alanları yalnız tek kategori seçiliyken ve o kategorinin listesindeki alanlarla yaz.
+- q yalnız model kodu (3CX, PC210, 320) ya da filtrelere sığmayan kısa ve anlamlı bir ürün kelimesi içindir; cümlenin tamamını, iş tarifini ya da anlamsız kelimeleri yazma. Sözle söylenen model numarasını rakamla yaz ("üç yüz yirmi" → 320).
 - Boş değerler: metin için "", sayı için 0, liste için [].
 
 Mevcut filtreler verilirse kullanıcı sonuç sayfasındadır:
-- Cümle bu filtreleri değiştiriyorsa ("… de ekle", "… çıkar", "… yerine …", "sadece …", "operatörlü olsun", "daha ucuz olsun") mod="duzenle" yaz ve değişiklik uygulanmış TAM filtre kümesini yaz: değişmeyen mevcut filtreleri de aynen tekrarla.
-- Cümle bambaşka bir arama ise ("Ankara'da forklift") mod="yeni" yaz ve yalnız yeni aramanın filtrelerini yaz.
+- Cümle bu filtreleri değiştiriyorsa ("… de ekle", "… çıkar", "… yerine …", "sadece …", "operatörlü olsun", "daha ucuz olsun", "en yeniye göre sırala") mod="duzenle" yaz ve değişiklik uygulanmış TAM filtre kümesini yaz: değişmeyen mevcut filtreleri (teknik dahil) aynen tekrarla.
+- "Filtreleri temizle", "hepsini kaldır" → mod="duzenle" ve tüm filtreler boş.
+- Cümle bambaşka bir arama ise ("Ankara'da forklift", "baştan, İzmir'de vinç") mod="yeni" yaz ve yalnız yeni aramanın filtrelerini yaz.
 
 Kategoriler ve alt kategoriler:
 ${SUB_LIST}
 
+Gündelik adlar (anahtar: söyleniş biçimleri, Türkçe karaktersiz yazılmış):
+${SYNONYM_LIST}
+
+Markaların söyleniş biçimleri:
+${BRAND_ALIAS_LIST}
+
+Teknik alanlar (kategori: alan (ad; tür)):
+${SPEC_LIST}
+
+Değer adları:
+${LABELS}
+
 Örnekler:
-"yarın şantiyede toprak kazacak büyükçe bir makine lazım İzmir" → kategori=[hafriyat], altKategori=[hafriyat/paletli-ekskavator], il=[İzmir]
+"yarın şantiyede toprak kazacak büyükçe bir makine lazım İzmir" → kategori=[hafriyat], il=[İzmir]
+"güzel Kocaeli'de jisibi lazım toprak kazacağız Recep Bey olsun" → kategori=[hafriyat], il=[Kocaeli], marka=[JCB], operator=operatorlu
+"İzmir'de 20 tonluk paletli ekskavatör operatörlü günlük" → kategori=[hafriyat], altKategori=[hafriyat/paletli-ekskavator], il=[İzmir], operator=operatorlu, periyot=[gunluk], teknik=[{alan: operasyonAgirligi, sayi: 20}]
 "depoda palet taşımak için bir şey arıyorum İzmir ya da Manisa" → kategori=[forklift], il=[İzmir, Manisa]
 "yüksekte cephe boyası yapacağız sepetli bir şey" → kategori=[vinc-platform], altKategori=[vinc-platform/sepetli-vinc]
 "elektrik kesintisi için güç kaynağı kiralamak istiyorum" → kategori=[jenerator]
@@ -132,7 +213,7 @@ function getClient(): Anthropic {
   return client;
 }
 
-/** LLM yedeği yapılandırılmış mı. Anahtar yoksa (yerel/CI) adım tamamen atlanır. */
+/** LLM yapılandırılmış mı. Anahtar yoksa (yerel/CI) adım tamamen atlanır. */
 export function llmEnabled(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
@@ -145,7 +226,10 @@ export async function parseWithLlm(
 ): Promise<LlmResult | null> {
   try {
     const api = deps.client ?? getClient();
-    const lines = [`Cümle: ${JSON.stringify(text)}`, `Zaten bulunanlar: ${JSON.stringify(describe(known))}`];
+    const lines = [`Cümle: ${JSON.stringify(text)}`];
+    // Kuralların q'su çoğu kez anlaşılmayan kelimelerdir: "doğru" diye verilmez.
+    const knownDesc = describe({ ...known, q: undefined });
+    if (Object.keys(knownDesc).length) lines.push(`Zaten bulunanlar: ${JSON.stringify(knownDesc)}`);
     if (current) lines.push(`Mevcut filtreler: ${JSON.stringify(describe(current))}`);
 
     const response = await api.messages.parse(
@@ -170,7 +254,7 @@ export async function parseWithLlm(
       mode: current && response.parsed_output.mod === "duzenle" ? "refine" : "new",
     };
   } catch (e) {
-    console.warn("[voice-search] LLM yedeği kullanılamadı:", e instanceof Error ? e.message : e);
+    console.warn("[voice-search] LLM kullanılamadı, kurallara düşülüyor:", e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -180,13 +264,17 @@ function describe(f: VoiceFilters): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const owner = (sub: string) => CATEGORIES.find((c) => c.subcategories.some((s) => s.slug === sub))?.slug;
   for (const [k, v] of Object.entries(f)) {
-    // Teknik özellikler şemada yok: kural motoru çözer, düzenlemede çağıran korur.
-    if (k === "q" || k === "removed" || k === "specs") continue;
+    if (k === "removed" || k === "specs") continue;
     if (Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : v !== undefined) {
       out[k] = v;
     }
   }
   if (f.altKategori.length) out.altKategori = f.altKategori.map((s) => `${owner(s)}/${s}`);
+  // Teknik özellikler şemadaki biçimde: düzenlemede model onları da tekrarlar.
+  const specs = Object.entries(f.specs);
+  if (specs.length) {
+    out.teknik = specs.map(([alan, v]) => (Array.isArray(v) ? { alan, secenekler: v } : { alan, sayi: v }));
+  }
   return out;
 }
 
@@ -240,6 +328,22 @@ function sanitize(o: LlmOutput): VoiceFilters {
   const year = (n: number) => (Number.isInteger(n) && n >= 1980 && n <= MAX_YEAR + 1 ? n : undefined);
   f.minYil = year(o.minYil);
   f.maxYil = year(o.maxYil);
+
+  // Teknik alan yalnız seçimin (tek kategori + alt türleri) alanlarındansa;
+  // filtre paneli de yalnız bunları gösterir. Seçenekler listedeki yazımla.
+  const fields = specFieldsForSelection(f.kategori, f.altKategori);
+  for (const t of o.teknik ?? []) {
+    const field = fields.find((s) => s.key === t.alan);
+    if (!field || field.key in f.specs) continue;
+    if (field.type === "number") {
+      if (Number.isFinite(t.sayi) && t.sayi > 0) f.specs[field.key] = t.sayi;
+    } else if (field.type === "select") {
+      const picked = t.secenekler.filter((s) => field.options?.includes(s));
+      if (picked.length) f.specs[field.key] = [...new Set(picked)];
+    } else if (t.sayi > 0 || t.secenekler.includes("true")) {
+      f.specs[field.key] = ["true"];
+    }
+  }
 
   const q = o.q.trim().slice(0, 60);
   if (q) f.q = q;

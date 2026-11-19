@@ -301,12 +301,12 @@ const llmOutput = (o: Record<string, unknown>) => ({
   ...o,
 });
 
-describe("LLM yedeği", () => {
+describe("LLM yedeği (hybrid motor)", () => {
   const FREE_TEXT = "yarın şantiyede toprak kazacak büyükçe makine İzmir";
 
   it("yüksek güvende hiç çağrılmaz", async () => {
     const { client, parse } = fakeClient({ parsed_output: llmOutput({}) });
-    const res = await parseVoiceQuery({ text: "İzmir kepçe" }, { llmDeps: { client } });
+    const res = await parseVoiceQuery({ text: "İzmir kepçe" }, { engine: "hybrid", llmDeps: { client } });
     expect(parse).not.toHaveBeenCalled();
     if (res.ok) expect(res.value.source).toBe("rules");
   });
@@ -319,7 +319,7 @@ describe("LLM yedeği", () => {
         il: ["Ankara"], // kural İzmir buldu; kural kazanır
       }),
     });
-    const res = await parseVoiceQuery({ text: FREE_TEXT }, { llmDeps: { client } });
+    const res = await parseVoiceQuery({ text: FREE_TEXT }, { engine: "hybrid", llmDeps: { client } });
     expect(parse).toHaveBeenCalledOnce();
     if (!res.ok) throw res.error;
     expect(res.value.source).toBe("llm");
@@ -330,7 +330,7 @@ describe("LLM yedeği", () => {
     const { client, parse } = fakeClient({ parsed_output: llmOutput({ kategori: ["forklift"] }) });
     const res = await parseVoiceQuery(
       { text: FREE_TEXT },
-      { llmDeps: { client }, beforeLlm: async () => Promise.reject(new Error("rate_limited")) },
+      { engine: "hybrid", llmDeps: { client }, beforeLlm: async () => Promise.reject(new Error("rate_limited")) },
     );
     expect(parse).not.toHaveBeenCalled();
     expect(res.ok && res.value.source).toBe("rules");
@@ -344,7 +344,7 @@ describe("LLM yedeği", () => {
       { parsed_output: null },
     ]) {
       const { client } = fakeClient(r);
-      const res = await parseVoiceQuery({ text: FREE_TEXT }, { llmDeps: { client } });
+      const res = await parseVoiceQuery({ text: FREE_TEXT }, { engine: "hybrid", llmDeps: { client } });
       expect(res.ok && res.value.source).toBe("rules");
       expect(res.ok && res.value.params).toMatchObject({ il: "İzmir" });
     }
@@ -403,7 +403,7 @@ describe("LLM yedeği", () => {
     });
     const res = await parseVoiceQuery(
       { text: "şu Kocaeli tarafına da bir göz atalım", current: { il: "İstanbul", kategori: "hafriyat", fotografli: "1" } },
-      { llmDeps: { client } },
+      { engine: "hybrid", llmDeps: { client } },
     );
     if (!res.ok) throw res.error;
     const sent = JSON.stringify((parse.mock.calls[0] as unknown[])[0]);
@@ -418,8 +418,110 @@ describe("LLM yedeği", () => {
     const { client } = fakeClient({
       parsed_output: llmOutput({ kategori: ["forklift"], il: ["İzmir", "Aydın"] }),
     });
-    const res = await parseVoiceQuery({ text: "İzmir'de depoda palet taşıyacak bir şey" }, { llmDeps: { client } });
+    const res = await parseVoiceQuery({ text: "İzmir'de depoda palet taşıyacak bir şey" }, { engine: "hybrid", llmDeps: { client } });
     expect(res.ok && res.value.params).toEqual({ il: "İzmir", kategori: "forklift" });
+  });
+});
+
+describe("LLM motoru (varsayılan)", () => {
+  const SENTENCE = "güzel Kocaeli'de Arabic lazım bunu şey yapacağız toprak kazacağız biz bunları Recep Bey olsun";
+
+  it("varsayılan motor LLM: kuralların anladığı cümle de LLM'e gider, kural sonucu karışmaz", async () => {
+    const { client, parse } = fakeClient({ parsed_output: llmOutput({ kategori: ["forklift"], il: ["Ankara"] }) });
+    const res = await parseVoiceQuery({ text: "İzmir kepçe" }, { llmDeps: { client } });
+    expect(parse).toHaveBeenCalledOnce();
+    if (!res.ok) throw res.error;
+    expect(res.value.source).toBe("llm");
+    // Kuralların İzmir/beko-loder sonucu eklenmez: yalnız modelin kümesi.
+    expect(res.value.params).toEqual({ kategori: "forklift", il: "Ankara" });
+    const req = (parse.mock.calls[0] as unknown[])[0] as { messages: unknown };
+    expect(JSON.stringify(req.messages)).not.toContain("Zaten bulunanlar");
+  });
+
+  it("bozuk konuşma metni: modelin kümesi olduğu gibi, anlamsız kelimeler q'ya girmez", async () => {
+    const { client } = fakeClient({
+      parsed_output: llmOutput({ kategori: ["hafriyat"], il: ["Kocaeli"], marka: ["JCB"], operator: "operatorlu" }),
+    });
+    const res = await parseVoiceQuery({ text: SENTENCE }, { engine: "llm", llmDeps: { client } });
+    if (!res.ok) throw res.error;
+    expect(res.value.params).toEqual({ kategori: "hafriyat", il: "Kocaeli", marka: "JCB", operator: "operatorlu" });
+    expect(res.value.remainder).toBe("");
+  });
+
+  it("LLM kullanılamazsa kurallara düşülür (hata, hız sınırı)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failing = fakeClient(new Error("timeout"));
+    const a = await parseVoiceQuery({ text: "İzmir kepçe" }, { engine: "llm", llmDeps: { client: failing.client } });
+    expect(a.ok && a.value.source).toBe("rules");
+    expect(a.ok && a.value.params).toMatchObject({ il: "İzmir", altKategori: "beko-loder" });
+
+    const limited = fakeClient({ parsed_output: llmOutput({ kategori: ["forklift"] }) });
+    const b = await parseVoiceQuery(
+      { text: "İzmir kepçe" },
+      { engine: "llm", llmDeps: { client: limited.client }, beforeLlm: async () => Promise.reject(new Error("rate_limited")) },
+    );
+    expect(limited.parse).not.toHaveBeenCalled();
+    expect(b.ok && b.value.source).toBe("rules");
+    warn.mockRestore();
+  });
+
+  it("düzenleme: modelin tam kümesi; sesin modellemediği parametreler korunur", async () => {
+    const { client, parse } = fakeClient({
+      parsed_output: llmOutput({
+        mod: "duzenle",
+        kategori: ["hafriyat"],
+        il: ["İstanbul", "Kocaeli"],
+        teknik: [{ alan: "operasyonAgirligi", sayi: 20, secenekler: [] }],
+      }),
+    });
+    const res = await parseVoiceQuery(
+      {
+        text: "Kocaeli tarafına da bakalım",
+        current: { il: "İstanbul", kategori: "hafriyat", spec_operasyonAgirligi: "20", fotografli: "1" },
+      },
+      { engine: "llm", llmDeps: { client } },
+    );
+    if (!res.ok) throw res.error;
+    const sent = JSON.stringify((parse.mock.calls[0] as unknown[])[0]);
+    expect(sent).toContain("operasyonAgirligi"); // mevcut teknik filtre modele gider
+    expect(res.value.mode).toBe("refine");
+    expect(res.value.params).toEqual({
+      il: "İstanbul,Kocaeli",
+      kategori: "hafriyat",
+      spec_operasyonAgirligi: "20",
+      fotografli: "1",
+    });
+    expect(res.value.changes?.added.map((c) => c.label)).toEqual(["Kocaeli"]);
+  });
+
+  it("'filtreleri temizle': boş küme, sesin dışındaki parametreler de gider", async () => {
+    const { client } = fakeClient({ parsed_output: llmOutput({ mod: "duzenle" }) });
+    const res = await parseVoiceQuery(
+      { text: "filtreleri temizle", current: { il: "İstanbul", fotografli: "1" } },
+      { engine: "llm", llmDeps: { client } },
+    );
+    if (!res.ok) throw res.error;
+    expect(res.value.mode).toBe("refine");
+    expect(res.value.params).toEqual({});
+  });
+
+  it("teknik alanlar seçime göre süzülür", async () => {
+    const tek = (alan: string, sayi: number, secenekler: string[] = []) => ({ alan, sayi, secenekler });
+    const one = fakeClient({
+      parsed_output: llmOutput({
+        kategori: ["tir"],
+        teknik: [tek("euroNorm", 0, ["Euro 6", "Euro 9"]), tek("adr", 1), tek("operasyonAgirligi", 20)],
+      }),
+    });
+    const out = await parseWithLlm("x", emptyFilters(), { client: one.client });
+    // Euro 9 listede yok; operasyon ağırlığı tırın alanı değil.
+    expect(out?.filters.specs).toEqual({ euroNorm: ["Euro 6"], adr: ["true"] });
+
+    const many = fakeClient({
+      parsed_output: llmOutput({ kategori: ["hafriyat", "forklift"], teknik: [tek("operasyonAgirligi", 20)] }),
+    });
+    const out2 = await parseWithLlm("x", emptyFilters(), { client: many.client });
+    expect(out2?.filters.specs).toEqual({}); // birden çok kategoride teknik alan yok
   });
 });
 

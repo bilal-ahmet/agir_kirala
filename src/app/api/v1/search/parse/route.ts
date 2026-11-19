@@ -9,8 +9,8 @@ import { parseVoiceQuery, voiceQuerySchema } from "@/lib/core/voice-search";
  * Oturum gerekmez (arama herkese açık). Dönen `params` olduğu gibi
  * GET /api/v1/listings sorgusuna eklenir.
  *
- * Hız sınırı yalnız LLM yedeğine girilecekse uygulanır: kural yolu bedavadır
- * ve DB'ye hiç gitmez. Söylenen filtre sonuç çıkmıyor diye atılmaz; uygun
+ * Hız sınırı yalnız LLM'e gidilecekse uygulanır (varsayılan motorda her
+ * cümle); aşılırsa kural motoruna düşülür. Kural yolu DB'ye hiç gitmez. Söylenen filtre sonuç çıkmıyor diye atılmaz; uygun
  * ilan yoksa istemci boş sonuç ekranını gösterir.
  */
 export const POST = withApi(async (req: NextRequest) => {

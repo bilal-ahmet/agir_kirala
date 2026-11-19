@@ -178,16 +178,24 @@ POST /api/v1/search/parse
 Anlaşılmayan cümle hata değildir: `params` boş döner, istemci "anlayamadım"
 gösterir. 400 yalnız boş ya da 200 karakterden uzun metinde döner.
 
-**Çözümleme:** önce sözlük (il, ilçe, kategori, marka, eş anlamlılar; bedava,
-~1 ms). Kural motoru olumsuzluğu ("JCB olmasın", "nakliye istemiyorum"), fiyat
+**Çözümleme:** varsayılan motor `llm`: her cümle Claude Haiku ile
+anlamlandırılır (~1,5–4 sn, `source: "llm"`). Modele sözlüğün gündelik adları
+ve markaların söyleniş biçimleri de verilir; konuşma tanıma hatalarını
+("Recep Bey olsun" → operatörlü) ve anlamsız kelimeleri o ayıklar. Anahtar
+yoksa, hız sınırı aşıldıysa ya da model hata/zaman aşımı verirse aşağıdaki
+kural motoruna düşülür (`source: "rules"`). `VOICE_SEARCH_ENGINE=hybrid` ile
+eski akışa dönülür:
+
+Kural motoru (hybrid'de birincil): önce sözlük (il, ilçe, kategori, marka,
+eş anlamlılar; bedava, ~1 ms). Kural motoru olumsuzluğu ("JCB olmasın", "nakliye istemiyorum"), fiyat
 ve yıl aralıklarını ("10 bin ile 20 bin arası", "2015 öncesi" → `maxYil`),
 komut/dolgu kelimelerini ve konuşma tanıma yazım hatalarını ("forkilift",
 "jenaratör") tanır. **Söylenen hiçbir filtre, sonuç çıkmıyor diye atılmaz:**
 sözlüğe uymayan anlamlı kelimeler `q` olarak aranır, uygun ilan yoksa istemci
 boş sonuç ekranını ("uygun ilan yok") filtre çipleriyle birlikte gösterir;
 kullanıcı istediği çipi kendisi kaldırır. Sunucu bu uç için DB'ye gitmez.
-Anlaşılmayan anlamlı kelime kalırsa ve `ANTHROPIC_API_KEY` tanımlıysa
-Claude Haiku yedeği denenir (`source: "llm"`). LLM'in çıktısı taksonomiden
+Hybrid'de anlaşılmayan anlamlı kelime kalırsa ve `ANTHROPIC_API_KEY`
+tanımlıysa Claude Haiku denenir. Her iki motorda LLM'in çıktısı taksonomiden
 üretilen enum'larla kilitlidir; hata/zaman aşımında sessizce sözlük sonucuna
 düşülür. Hız sınırı (`voice`, IP başına 20/dk) yalnız LLM yoluna uygulanır.
 

@@ -81,7 +81,7 @@ export interface VoiceParseResult {
   chips: VoiceChip[];
   /** Hiçbir filtreye dönüşmeyen kelimeler (bilgi amaçlı). */
   remainder: string;
-  /** Sonucu kim üretti: yalnız kurallar mı, LLM yedeği de mi. */
+  /** Sonucu kim üretti: LLM mi, kural motoru mu (bkz. VoiceEngine). */
   source: "rules" | "llm";
   /**
    * "new": yeni arama. "refine": istekte gönderilen mevcut filtreler

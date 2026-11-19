@@ -707,7 +707,7 @@ export function buildOpenApiDocument(): Json {
             source: {
               type: "string",
               enum: ["rules", "llm"],
-              description: "rules: sözlük eşleme. llm: serbest cümle için LLM yedeği de kullanıldı.",
+              description: "llm: cümleyi model anlamlandırdı (varsayılan). rules: sözlük eşleme (model kullanılamadığında ya da hybrid motorda).",
             },
             mode: {
               type: "string",
